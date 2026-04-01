@@ -241,13 +241,27 @@ tr:nth-child(even) { background: #fafbfc; }
   </div>
 
   <div class="tab-content" id="tab-conflicts">
+    <div id="conflictQuickBar" style="display:none;margin-bottom:10px;display:flex;gap:8px;align-items:center;">
+      <span style="font-size:0.85em;color:#555;font-weight:600;">批量操作：</span>
+      <button class="btn btn-sm btn-primary" onclick="resolveAllConflicts('all')">全部保留全部</button>
+      <button class="btn btn-sm btn-secondary" onclick="resolveAllConflicts('first')">全部仅保留首条</button>
+    </div>
     <div id="conflictsContainer"></div>
   </div>
 
   <div class="download-section">
-    <div class="btn-group">
+    <div id="sheetOutputOption" style="display:none;margin-bottom:6px;font-size:0.9em;">
+      <label><input type="checkbox" id="keepSheetOutput" checked onchange="updateCsvState()"> 按工作表分页输出（多 Sheet 时有效）</label>
+    </div>
+    <div style="margin-bottom:10px;font-size:0.9em;display:flex;gap:16px;flex-wrap:wrap;">
+      <label><input type="checkbox" id="extraSheetUnmatchedA" onchange="updateCsvState()"> 保存未匹配 A 到独立工作表</label>
+      <label><input type="checkbox" id="extraSheetUnmatchedB" onchange="updateCsvState()"> 保存未匹配 B 到独立工作表</label>
+      <label><input type="checkbox" id="extraSheetConflicts" onchange="updateCsvState()"> 保存冲突数据到独立工作表</label>
+    </div>
+    <div class="btn-group" style="align-items:center;">
       <button class="btn btn-success" onclick="downloadExcel()">下载 Excel</button>
-      <button class="btn btn-secondary" onclick="downloadCSV()">下载 CSV</button>
+      <button class="btn btn-secondary" id="btnDownloadCSV" onclick="downloadCSV()">下载 CSV</button>
+      <span id="csvDisabledReason" style="display:none;font-size:0.8em;color:#e74c3c;margin-left:4px;"></span>
     </div>
   </div>
 </div>
@@ -821,6 +835,7 @@ function combineSheetData(which) {
     for (var r = 0; r < cfg.data.length; r++) {
       var row = cfg.data[r];
       var out = {};
+      out.__sheet__ = cfg.name;
       out[commonKeyName] = row[cfg.keyCol] ?? '';
       for (var c = 0; c < nonKeyCols.length; c++) {
         var col = nonKeyCols[c];
@@ -942,6 +957,7 @@ function resolveColumnNames(colsA, colsB, keyColA, keyColB) {
 
 function mergeRow(rowA, rowB, outputCols, keyColA, keyColB) {
   const out = {};
+  out.__sheet__ = rowA.__sheet__ || '';
   for (const col of outputCols) {
     if (col.source === 'key') {
       out[col.name] = rowA[keyColA];
@@ -956,6 +972,7 @@ function mergeRow(rowA, rowB, outputCols, keyColA, keyColB) {
 
 function buildUnmatchedRow(row, which, outputCols, keyColA, keyColB, keyValue) {
   const out = {};
+  out.__sheet__ = row.__sheet__ || '';
   for (const col of outputCols) {
     if (col.source === 'key') {
       out[col.name] = keyValue;
@@ -993,6 +1010,44 @@ function renderResults() {
   renderConflicts(r);
 
   switchTab('matched');
+
+  const multiSheet = (
+    state.sheetConfigsA.filter(c => c.checked).length > 1 ||
+    state.sheetConfigsB.filter(c => c.checked).length > 1
+  );
+  document.getElementById('sheetOutputOption').style.display = multiSheet ? '' : 'none';
+  document.getElementById('keepSheetOutput').checked = multiSheet;
+  updateCsvState();
+}
+
+function updateCsvState() {
+  const keepSheet = document.getElementById('keepSheetOutput')?.checked;
+  const extraSheets = document.getElementById('extraSheetUnmatchedA')?.checked ||
+                      document.getElementById('extraSheetUnmatchedB')?.checked ||
+                      document.getElementById('extraSheetConflicts')?.checked;
+  const shouldDisable = keepSheet || extraSheets;
+  const csvBtn = document.getElementById('btnDownloadCSV');
+  const reasonEl = document.getElementById('csvDisabledReason');
+  if (csvBtn) {
+    csvBtn.disabled = shouldDisable;
+    csvBtn.style.opacity = shouldDisable ? '0.4' : '';
+    csvBtn.style.cursor = shouldDisable ? 'not-allowed' : '';
+  }
+  if (reasonEl) {
+    if (shouldDisable) {
+      const reasons = [];
+      if (keepSheet) reasons.push('按工作表分页');
+      if (extraSheets) reasons.push('额外数据 Sheet');
+      reasonEl.textContent = 'CSV 不支持多 Sheet 输出（已启用：' + reasons.join('、') + '）';
+      reasonEl.style.display = '';
+    } else {
+      reasonEl.style.display = 'none';
+    }
+  }
+}
+
+function resolveAllConflicts(action) {
+  state.conflictKeys.forEach(function(_, ci) { resolveConflict(ci, action); });
 }
 
 function renderUnmatchedTable(which, items, r) {
@@ -1029,8 +1084,10 @@ function toggleAllUnmatched(which, checked) {
 
 function renderConflicts(r) {
   const container = document.getElementById('conflictsContainer');
-  // Store ordered keys for index-based access
   state.conflictKeys = Object.keys(r.conflicts);
+
+  const quickBar = document.getElementById('conflictQuickBar');
+  if (quickBar) quickBar.style.display = state.conflictKeys.length > 0 ? 'flex' : 'none';
 
   if (state.conflictKeys.length === 0) {
     container.innerHTML = '<p style="color:#888; text-align:center; padding:20px;">\u6CA1\u6709\u91CD\u590D\u952E\u51B2\u7A81</p>';
@@ -1149,19 +1206,100 @@ function buildFinalOutput() {
 }
 
 // ── Download ──
+function buildConflictsSheet(r) {
+  const rows = [];
+  const merges = [];
+  let rowIdx = 1; // row 0 = header
+
+  for (const [key, group] of Object.entries(r.conflicts)) {
+    const groupSize = group.rowsA.length + group.rowsB.length;
+    const groupStart = rowIdx;
+
+    for (const row of group.rowsA) {
+      const out = { _键值: key, _来源文件: '文件A' };
+      for (const c of r.colsA) out[c] = row[c] ?? '';
+      rows.push(out);
+      rowIdx++;
+    }
+    for (const row of group.rowsB) {
+      const out = { _键值: key, _来源文件: '文件B' };
+      for (const c of r.colsB) out[c] = row[c] ?? '';
+      rows.push(out);
+      rowIdx++;
+    }
+
+    if (groupSize > 1) {
+      merges.push({ s: { r: groupStart, c: 0 }, e: { r: groupStart + groupSize - 1, c: 0 } });
+    }
+  }
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  if (merges.length > 0) ws['!merges'] = merges;
+  return ws;
+}
+
+function sanitizeSheetName(name) {
+  return String(name).replace(/[\/\\?*[\]:]/g, '_').slice(0, 31) || '合并结果';
+}
+
 function downloadExcel() {
   const rows = buildFinalOutput();
-  if (rows.length === 0) { alert('\u6CA1\u6709\u6570\u636E\u53EF\u4EE5\u4E0B\u8F7D'); return; }
-  const ws = XLSX.utils.json_to_sheet(rows);
+  if (rows.length === 0) { alert('没有数据可以下载'); return; }
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '\u5408\u5E76\u7ED3\u679C');
-  XLSX.writeFile(wb, '\u5408\u5E76\u7ED3\u679C.xlsx');
+
+  if (document.getElementById('keepSheetOutput')?.checked) {
+    const groups = new Map();
+    for (const row of rows) {
+      const key = sanitizeSheetName(row.__sheet__ || '合并结果');
+      if (!groups.has(key)) groups.set(key, []);
+      const { __sheet__, ...clean } = row;
+      groups.get(key).push(clean);
+    }
+    // Deduplicate sheet names
+    const usedNames = new Map();
+    for (const [name, sheetRows] of groups) {
+      const count = usedNames.get(name) ?? 0;
+      const finalName = count === 0 ? name : name.slice(0, 28) + '_' + count;
+      usedNames.set(name, count + 1);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetRows), finalName);
+    }
+  } else {
+    const cleanRows = rows.map(({ __sheet__, ...rest }) => rest);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cleanRows), '合并结果');
+  }
+
+  const r = state.mergeResult;
+  if (document.getElementById('extraSheetUnmatchedA')?.checked && r.unmatchedA.length > 0) {
+    const rowsA = r.unmatchedA.map(function(item) {
+      const out = {};
+      for (const c of r.colsA) out[c] = item._row[c] ?? '';
+      return out;
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rowsA), '未匹配_A');
+  }
+  if (document.getElementById('extraSheetUnmatchedB')?.checked && r.unmatchedB.length > 0) {
+    const rowsB = r.unmatchedB.map(function(item) {
+      const out = {};
+      for (const c of r.colsB) out[c] = item._row[c] ?? '';
+      return out;
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rowsB), '未匹配_B');
+  }
+  if (document.getElementById('extraSheetConflicts')?.checked) {
+    const conflictWs = buildConflictsSheet(r);
+    if (conflictWs['!ref']) {
+      XLSX.utils.book_append_sheet(wb, conflictWs, '冲突数据');
+    }
+  }
+
+  XLSX.writeFile(wb, '合并结果.xlsx');
 }
 
 function downloadCSV() {
   const rows = buildFinalOutput();
-  if (rows.length === 0) { alert('\u6CA1\u6709\u6570\u636E\u53EF\u4EE5\u4E0B\u8F7D'); return; }
-  const ws = XLSX.utils.json_to_sheet(rows);
+  if (rows.length === 0) { alert('没有数据可以下载'); return; }
+  const cleanRows = rows.map(({ __sheet__, ...rest }) => rest);
+  const ws = XLSX.utils.json_to_sheet(cleanRows);
   const csv = XLSX.utils.sheet_to_csv(ws);
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
