@@ -16,3 +16,9 @@ Desktop.ini
 # Temp
 *.tmp
 *.log
+.ace-tool/
+
+# Vite / Node
+node_modules/
+dist/
+dist-single/
