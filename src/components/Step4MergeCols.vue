@@ -1,86 +1,108 @@
 <template>
   <div>
-    <div class="cols-row">
-      <div v-for="which in ['A', 'B']" :key="which" class="cols-group">
-        <h4>文件 {{ which }} 列</h4>
-        <div>
-          <template v-if="checkedConfigs(which).length === 0">
-            <p style="color:#888;font-size:0.85em">请先勾选工作表</p>
-          </template>
-          <template v-else-if="state.selection[which].colsLinked || checkedConfigs(which).length === 1">
-            <input
-              class="cols-search"
-              v-model="state.selection[which].colSearch"
+    <NGrid :cols="{ xs: 1, m: 2 }" :x-gap="16" :y-gap="16" responsive="screen">
+      <NGridItem v-for="which in ['A', 'B']" :key="which">
+        <div style="font-weight: 600; font-size: 0.9em; color: #555; margin-bottom: 10px;">
+          文件 {{ which }} 列
+        </div>
+        <template v-if="checkedConfigs(which).length === 0">
+          <p style="color: #aaa; font-size: 0.85em;">请先勾选工作表</p>
+        </template>
+        <template v-else-if="state.selection[which].colsLinked || checkedConfigs(which).length === 1">
+          <div style="display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px;">
+            <NInput
+              v-model:value="state.selection[which].colSearch"
               placeholder="搜索列名..."
-            >
-            <div class="cols-toggles">
-              <a @click="selectAll(which, true)">全选</a> /
-              <a @click="selectAll(which, false)">全不选</a>
+              clearable
+              size="small"
+              style="flex: 1"
+            />
+            <div style="font-size: 0.8em; color: #4361ee; background: #f0f3ff; padding: 4px 8px; border-radius: 4px; white-space: nowrap; margin-top: 2px;">
+              已选 {{ getSelectedCount(which) }} / {{ checkedConfigs(which)[0].cfg.headers.length }}
             </div>
-            <div class="cols-list">
-              <label
-                v-for="h in checkedConfigs(which)[0].cfg.headers"
-                :key="h"
-                :class="{ locked: h === linkedKeyCol(which) }"
+          </div>
+          <div class="cols-actions">
+            <NButton text size="small" @click="selectAll(which, true)">全选</NButton>
+            <span style="color: #ccc; font-size: 0.9em;">|</span>
+            <NButton text size="small" @click="selectAll(which, false)">全不选</NButton>
+          </div>
+          <div class="cols-list">
+            <template v-for="h in checkedConfigs(which)[0].cfg.headers" :key="h">
+              <div
                 v-show="!state.selection[which].colSearch || h.toLowerCase().includes(state.selection[which].colSearch.toLowerCase())"
+                class="cols-list-item"
+                :class="{ 'is-locked': h === linkedKeyCol(which) }"
+                @click="h !== linkedKeyCol(which) && onLinkedColChange(which, h, !isLinkedColSelected(which, h))"
               >
-                <input
-                  type="checkbox"
-                  :value="h"
+                <NCheckbox
                   :checked="isLinkedColSelected(which, h)"
                   :disabled="h === linkedKeyCol(which)"
-                  @change="onLinkedColChange(which, h, $event.target.checked)"
-                >
-                {{ h }}
-              </label>
-            </div>
-            <a v-if="checkedConfigs(which).length > 1" class="apply-all-link" @click="toggleLinked(which)">
-              独立配置各工作表
-            </a>
-          </template>
-          <template v-else>
+                  @update:checked="(v) => onLinkedColChange(which, h, v)"
+                  @click.stop
+                />
+                <span class="col-name-text">{{ h }}</span>
+              </div>
+            </template>
+          </div>
+          <a v-if="checkedConfigs(which).length > 1" class="apply-all-link" @click="toggleLinked(which)">
+            独立配置各工作表
+          </a>
+        </template>
+        <template v-else>
+          <NSpace vertical :size="8">
             <div v-for="item in checkedConfigs(which)" :key="item.idx" class="per-sheet-section">
               <div class="per-sheet-label">{{ item.cfg.name }}</div>
-              <input
-                class="cols-search"
-                v-model="state.selection[which].perSheetColSearch[item.idx]"
-                placeholder="搜索列名..."
-              >
-              <div class="cols-toggles">
-                <a @click="selectAllPerSheet(item.cfg, which, item.idx, true)">全选</a> /
-                <a @click="selectAllPerSheet(item.cfg, which, item.idx, false)">全不选</a>
+              <div style="display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px;">
+                <NInput
+                  v-model:value="state.selection[which].perSheetColSearch[item.idx]"
+                  placeholder="搜索列名..."
+                  clearable
+                  size="small"
+                  style="flex: 1"
+                />
+                <div style="font-size: 0.8em; color: #4361ee; background: #f0f3ff; padding: 4px 8px; border-radius: 4px; white-space: nowrap; margin-top: 2px;">
+                  已选 {{ getPerSheetSelectedCount(item.cfg) }} / {{ item.cfg.headers.length }}
+                </div>
+              </div>
+              <div class="cols-actions">
+                <NButton text size="small" @click="selectAllPerSheet(item.cfg, true)">全选</NButton>
+                <span style="color: #ccc; font-size: 0.9em;">|</span>
+                <NButton text size="small" @click="selectAllPerSheet(item.cfg, false)">全不选</NButton>
               </div>
               <div class="cols-list">
-                <label
+                <div
                   v-for="h in item.cfg.headers"
                   :key="h"
-                  :class="{ locked: h === item.cfg.keyCol }"
                   v-show="!state.selection[which].perSheetColSearch[item.idx] || h.toLowerCase().includes((state.selection[which].perSheetColSearch[item.idx] || '').toLowerCase())"
+                  class="cols-list-item"
+                  :class="{ 'is-locked': h === item.cfg.keyCol }"
+                  @click="h !== item.cfg.keyCol && onPerSheetColChange(item.cfg, h, !isPerSheetColSelected(item.cfg, h))"
                 >
-                  <input
-                    type="checkbox"
-                    :value="h"
+                  <NCheckbox
                     :checked="isPerSheetColSelected(item.cfg, h)"
                     :disabled="h === item.cfg.keyCol"
-                    @change="onPerSheetColChange(item.cfg, h, $event.target.checked)"
-                  >
-                  {{ h }}
-                </label>
+                    @update:checked="(v) => onPerSheetColChange(item.cfg, h, v)"
+                    @click.stop
+                  />
+                  <span class="col-name-text">{{ h }}</span>
+                </div>
               </div>
             </div>
-            <a class="apply-all-link" @click="toggleLinked(which)">同步所有工作表</a>
-          </template>
-        </div>
-      </div>
-    </div>
-    <div class="btn-group">
-      <button class="btn btn-primary" @click="runMerge">开始合并</button>
+          </NSpace>
+          <a class="apply-all-link" @click="toggleLinked(which)">同步所有工作表</a>
+        </template>
+      </NGridItem>
+    </NGrid>
+
+    <div style="display: flex; justify-content: center; margin-top: 20px;">
+      <NButton type="primary" size="large" @click="runMerge">开始合并</NButton>
     </div>
   </div>
 </template>
 
 <script setup>
 import { inject } from 'vue';
+import { NGrid, NGridItem, NInput, NCheckbox, NButton, NSpace } from 'naive-ui';
 
 const { state, toggleColsLinked, runMerge: doRunMerge } = inject('appState');
 
@@ -100,19 +122,12 @@ function linkedKeyCol(which) {
 
 function isLinkedColSelected(which, h) {
   const sel = state.selection[which];
-  const keyCol = linkedKeyCol(which);
-  if (h === keyCol) return true;
-  if (sel.linkedSelectedCols.length === 0) return true;
+  if (h === linkedKeyCol(which)) return true;
   return sel.linkedSelectedCols.includes(h);
 }
 
 function onLinkedColChange(which, h, checked) {
   const sel = state.selection[which];
-  const first = checkedConfigs(which)[0];
-  if (!first) return;
-  if (sel.linkedSelectedCols.length === 0) {
-    sel.linkedSelectedCols = first.cfg.headers.slice();
-  }
   if (checked) {
     if (!sel.linkedSelectedCols.includes(h)) sel.linkedSelectedCols.push(h);
   } else {
@@ -134,14 +149,11 @@ function selectAll(which, checked) {
 
 function isPerSheetColSelected(cfg, h) {
   if (h === cfg.keyCol) return true;
-  if (!cfg.selectedCols || cfg.selectedCols.length === 0) return true;
-  return cfg.selectedCols.includes(h);
+  return (cfg.selectedCols || []).includes(h);
 }
 
 function onPerSheetColChange(cfg, h, checked) {
-  if (!cfg.selectedCols || cfg.selectedCols.length === 0) {
-    cfg.selectedCols = cfg.headers.slice();
-  }
+  if (!cfg.selectedCols) cfg.selectedCols = [];
   if (checked) {
     if (!cfg.selectedCols.includes(h)) cfg.selectedCols.push(h);
   } else {
@@ -149,7 +161,7 @@ function onPerSheetColChange(cfg, h, checked) {
   }
 }
 
-function selectAllPerSheet(cfg, which, idx, checked) {
+function selectAllPerSheet(cfg, checked) {
   if (checked) {
     cfg.selectedCols = cfg.headers.slice();
   } else {
@@ -159,6 +171,14 @@ function selectAllPerSheet(cfg, which, idx, checked) {
 
 function toggleLinked(which) {
   toggleColsLinked(which);
+}
+
+function getSelectedCount(which) {
+  return state.selection[which].linkedSelectedCols.length;
+}
+
+function getPerSheetSelectedCount(cfg) {
+  return (cfg.selectedCols || []).length;
 }
 
 function runMerge() {

@@ -1,219 +1,193 @@
 <template>
   <div v-if="state.mergeResult">
-    <!-- Tabs -->
-    <div class="tabs">
-      <div
-        class="tab"
-        :class="{ active: state.ui.activeTab === 'matched' }"
-        @click="state.ui.activeTab = 'matched'"
+    <NTabs v-model:value="state.ui.activeTab" type="line" animated>
+      <!-- Tab: Matched -->
+      <NTabPane
+        name="matched"
+        :tab="`匹配结果 (${state.mergeResult.matched.length})`"
       >
-        匹配结果
-        <span class="badge" style="background:#2ecc71">{{ state.mergeResult.matched.length }}</span>
-      </div>
-      <div
-        class="tab"
-        :class="{ active: state.ui.activeTab === 'unmatched' }"
-        @click="state.ui.activeTab = 'unmatched'"
-      >
-        未匹配数据
-        <span class="badge" style="background:#f39c12">
-          {{ state.mergeResult.unmatchedA.length + state.mergeResult.unmatchedB.length }}
-        </span>
-      </div>
-      <div
-        class="tab"
-        :class="{ active: state.ui.activeTab === 'conflicts' }"
-        @click="state.ui.activeTab = 'conflicts'"
-      >
-        重复键冲突
-        <span v-if="state.conflictKeys.length > 0" class="badge">{{ state.conflictKeys.length }}</span>
-      </div>
-    </div>
-
-    <!-- Tab: Matched -->
-    <div v-if="state.ui.activeTab === 'matched'" class="tab-content active">
-      <div class="table-info">共 {{ state.mergeResult.matched.length }} 条匹配记录</div>
-      <div class="table-wrap">
         <DataTable :rows="state.mergeResult.matched" :cols="outputColNames" />
-      </div>
-    </div>
+      </NTabPane>
 
-    <!-- Tab: Unmatched -->
-    <div v-if="state.ui.activeTab === 'unmatched'" class="tab-content active flex">
-      <div v-if="state.mergeResult.unmatchedA.length > 0" class="unmatched-section">
-        <h4>仅在文件 A 中</h4>
-        <div class="toggle-all">
-          <a @click="toggleAllUnmatched('A', true)">全选</a> /
-          <a @click="toggleAllUnmatched('A', false)">全不选</a>
+      <!-- Tab: Unmatched -->
+      <NTabPane
+        name="unmatched"
+        :tab="`未匹配数据 (${state.mergeResult.unmatchedA.length + state.mergeResult.unmatchedB.length})`"
+      >
+        <div v-if="state.mergeResult.unmatchedA.length === 0 && state.mergeResult.unmatchedB.length === 0">
+          <NEmpty description="无未匹配数据" style="padding: 40px 0;" />
         </div>
-        <div class="table-info">共 {{ state.mergeResult.unmatchedA.length }} 条</div>
-        <div class="table-wrap">
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:40px"></th>
-                  <th v-for="c in state.mergeResult.colsA" :key="c">{{ c }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, i) in state.mergeResult.unmatchedA" :key="i">
-                  <td>
-                    <input
-                      type="checkbox"
-                      :checked="state.unmatchedSelection.A.includes(i)"
-                      @change="toggleUnmatched('A', i, $event.target.checked)"
-                    >
-                  </td>
-                  <td v-for="c in state.mergeResult.colsA" :key="c">{{ item._row[c] ?? '' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <div v-if="state.mergeResult.unmatchedB.length > 0" class="unmatched-section">
-        <h4>仅在文件 B 中</h4>
-        <div class="toggle-all">
-          <a @click="toggleAllUnmatched('B', true)">全选</a> /
-          <a @click="toggleAllUnmatched('B', false)">全不选</a>
-        </div>
-        <div class="table-info">共 {{ state.mergeResult.unmatchedB.length }} 条</div>
-        <div class="table-wrap">
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:40px"></th>
-                  <th v-for="c in state.mergeResult.colsB" :key="c">{{ c }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, i) in state.mergeResult.unmatchedB" :key="i">
-                  <td>
-                    <input
-                      type="checkbox"
-                      :checked="state.unmatchedSelection.B.includes(i)"
-                      @change="toggleUnmatched('B', i, $event.target.checked)"
-                    >
-                  </td>
-                  <td v-for="c in state.mergeResult.colsB" :key="c">{{ item._row[c] ?? '' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <div v-if="state.mergeResult.unmatchedA.length === 0 && state.mergeResult.unmatchedB.length === 0">
-        <p style="color:#888;text-align:center;padding:20px;">无未匹配数据</p>
-      </div>
-    </div>
+        <NGrid v-else :cols="{ xs: 1, m: 2 }" :x-gap="16" :y-gap="16" responsive="screen">
+          <NGridItem v-if="state.mergeResult.unmatchedA.length > 0">
+            <div class="unmatched-section-title">仅在 {{ state.filenameA || '文件 A' }} 中</div>
+            <div class="table-info-text">共 {{ state.mergeResult.unmatchedA.length }} 条</div>
+            <NDataTable
+              :columns="unmatchedAColumns"
+              :data="unmatchedAData"
+              :row-key="(row) => row.__idx"
+              :checked-row-keys="state.unmatchedSelection.A"
+              :max-height="320"
+              :scroll-x="unmatchedAScrollWidth"
+              :bordered="false"
+              size="small"
+              @update:checked-row-keys="(keys) => (state.unmatchedSelection.A = keys)"
+            />
+          </NGridItem>
+          <NGridItem v-if="state.mergeResult.unmatchedB.length > 0">
+            <div class="unmatched-section-title">仅在 {{ state.filenameB || '文件 B' }} 中</div>
+            <div class="table-info-text">共 {{ state.mergeResult.unmatchedB.length }} 条</div>
+            <NDataTable
+              :columns="unmatchedBColumns"
+              :data="unmatchedBData"
+              :row-key="(row) => row.__idx"
+              :checked-row-keys="state.unmatchedSelection.B"
+              :max-height="320"
+              :scroll-x="unmatchedBScrollWidth"
+              :bordered="false"
+              size="small"
+              @update:checked-row-keys="(keys) => (state.unmatchedSelection.B = keys)"
+            />
+          </NGridItem>
+        </NGrid>
+      </NTabPane>
 
-    <!-- Tab: Conflicts -->
-    <div v-if="state.ui.activeTab === 'conflicts'" class="tab-content active">
-      <div v-if="state.conflictKeys.length > 0" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-        <span style="font-size:0.85em;color:#555;font-weight:600;">批量操作：</span>
-        <button class="btn btn-sm btn-primary" @click="resolveAllConflicts('all')">全部保留全部</button>
-        <button class="btn btn-sm btn-secondary" @click="resolveAllConflicts('first')">全部仅保留首条</button>
-      </div>
-      <div class="conflicts-container">
-        <template v-if="state.conflictKeys.length === 0">
-          <p style="color:#888;text-align:center;padding:20px;">没有重复键冲突</p>
+      <!-- Tab: Conflicts -->
+      <NTabPane name="conflicts">
+        <template #tab>
+          <NBadge :value="unhandledConflictsCount" :dot="false" :show="unhandledConflictsCount > 0" type="error">
+            {{ conflictsTabLabel }}
+          </NBadge>
         </template>
-        <div
-          v-for="(key, ci) in state.conflictKeys"
-          :key="key"
-          class="conflict-group"
-        >
-          <div class="conflict-header">
-            键 "{{ key }}"：文件A {{ state.mergeResult.conflicts[key].rowsA.length }} 行，文件B {{ state.mergeResult.conflicts[key].rowsB.length }} 行
-            <span v-if="state.conflictResolutions[key]" class="conflict-status">
-              {{ { all: '✓ 保留全部', first: '✓ 仅保留首条', remove: '✓ 已移除' }[state.conflictResolutions[key]] }}
-            </span>
-          </div>
-          <div class="conflict-side-by-side">
-            <div class="conflict-side">
-              <div class="conflict-side-label label-a">文件 A</div>
-              <table>
-                <thead>
-                  <tr><th v-for="c in state.mergeResult.colsA" :key="c">{{ c }}</th></tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, ri) in state.mergeResult.conflicts[key].rowsA" :key="ri">
-                    <td v-for="c in state.mergeResult.colsA" :key="c">{{ row[c] ?? '' }}</td>
-                  </tr>
-                </tbody>
-              </table>
+
+        <div v-if="state.conflictKeys.length > 0" style="margin-bottom: 16px;">
+          <NGrid :cols="{ xs: 1, m: 2 }" :x-gap="12" :y-gap="12">
+            <NGridItem>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <span style="font-size: 0.85em; color: #555; font-weight: 600;">批量操作：</span>
+                <NButton size="small" type="primary" secondary @click="resolveAllConflicts('all')">全部保留全部</NButton>
+                <NButton size="small" secondary @click="resolveAllConflicts('first')">全部仅保留首条</NButton>
+              </div>
+            </NGridItem>
+            <NGridItem>
+              <NInput
+                v-model:value="state.ui.conflictSearch"
+                placeholder="搜索冲突键值..."
+                clearable
+                size="small"
+              />
+            </NGridItem>
+          </NGrid>
+        </div>
+
+        <div class="conflicts-container">
+          <NEmpty v-if="state.conflictKeys.length === 0" description="没有重复键冲突" style="padding: 40px 0;" />
+          <NEmpty v-else-if="filteredConflictKeys.length === 0" description="没有匹配的搜索结果" style="padding: 40px 0;" />
+          <div
+            v-for="(key, ci) in filteredConflictKeys"
+            :key="key"
+            class="conflict-group"
+          >
+            <div class="conflict-header-row">
+              <span class="conflict-key-text">
+                键 "{{ key }}"：{{ state.filenameA || '文件 A' }} {{ state.mergeResult.conflicts[key].rowsA.length }} 行，{{ state.filenameB || '文件 B' }} {{ state.mergeResult.conflicts[key].rowsB.length }} 行
+              </span>
+              <span v-if="state.conflictResolutions[key]" class="conflict-status-text">
+                {{ { all: '✓ 保留全部', first: '✓ 仅保留首条', remove: '✓ 已移除' }[state.conflictResolutions[key]] }}
+              </span>
             </div>
-            <div class="conflict-side">
-              <div class="conflict-side-label label-b">文件 B</div>
-              <table>
-                <thead>
-                  <tr><th v-for="c in state.mergeResult.colsB" :key="c">{{ c }}</th></tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, ri) in state.mergeResult.conflicts[key].rowsB" :key="ri">
-                    <td v-for="c in state.mergeResult.colsB" :key="c">{{ row[c] ?? '' }}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div class="conflict-side-by-side">
+              <div class="conflict-side">
+                <div class="conflict-side-label-a">{{ state.filenameA || '文件 A' }}</div>
+                <div class="inline-table-wrap">
+                  <table class="inline-table">
+                    <thead>
+                      <tr><th v-for="c in state.mergeResult.colsA" :key="c">{{ c }}</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(row, ri) in state.mergeResult.conflicts[key].rowsA" :key="ri">
+                        <td v-for="c in state.mergeResult.colsA" :key="c">{{ row[c] ?? '' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="conflict-side">
+                <div class="conflict-side-label-b">{{ state.filenameB || '文件 B' }}</div>
+                <div class="inline-table-wrap">
+                  <table class="inline-table">
+                    <thead>
+                      <tr><th v-for="c in state.mergeResult.colsB" :key="c">{{ c }}</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(row, ri) in state.mergeResult.conflicts[key].rowsB" :key="ri">
+                        <td v-for="c in state.mergeResult.colsB" :key="c">{{ row[c] ?? '' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="conflict-actions">
-            <button
-              class="btn btn-sm btn-primary"
-              :class="{ chosen: state.conflictResolutions[key] === 'all' }"
-              @click="resolveConflict(ci, 'all')"
-            >保留全部</button>
-            <button
-              class="btn btn-sm btn-secondary"
-              :class="{ chosen: state.conflictResolutions[key] === 'first' }"
-              @click="resolveConflict(ci, 'first')"
-            >仅保留首条</button>
-            <button
-              class="btn btn-sm btn-danger"
-              :class="{ chosen: state.conflictResolutions[key] === 'remove' }"
-              @click="resolveConflict(ci, 'remove')"
-            >移除</button>
+            <NSpace style="margin-top: 10px;" :size="8">
+              <NButton
+                size="small"
+                :type="state.conflictResolutions[key] === 'all' ? 'primary' : 'default'"
+                :secondary="state.conflictResolutions[key] !== 'all'"
+                @click="resolveConflict(ci, 'all')"
+              >保留全部</NButton>
+              <NButton
+                size="small"
+                :type="state.conflictResolutions[key] === 'first' ? 'primary' : 'default'"
+                :secondary="state.conflictResolutions[key] !== 'first'"
+                @click="resolveConflict(ci, 'first')"
+              >仅保留首条</NButton>
+              <NButton
+                size="small"
+                :type="state.conflictResolutions[key] === 'remove' ? 'error' : 'default'"
+                :secondary="state.conflictResolutions[key] !== 'remove'"
+                @click="resolveConflict(ci, 'remove')"
+              >移除</NButton>
+            </NSpace>
           </div>
         </div>
-      </div>
-    </div>
+      </NTabPane>
+    </NTabs>
 
     <!-- Download section -->
     <div class="download-section">
-      <div v-if="showSheetOutputOption" style="margin-bottom:6px;font-size:0.9em;">
-        <label>
-          <input type="checkbox" v-model="state.outputOptions.keepSheetOutput">
-          按工作表分页输出（多 Sheet 时有效）
-        </label>
+      <div class="download-options">
+        <NCheckbox
+          v-if="showSheetOutputOption"
+          v-model:checked="state.outputOptions.keepSheetOutput"
+        >按工作表分页输出（多 Sheet 时有效）</NCheckbox>
+        <NCheckbox v-model:checked="state.outputOptions.extraSheetUnmatchedA">保存未匹配 A 到独立工作表</NCheckbox>
+        <NCheckbox v-model:checked="state.outputOptions.extraSheetUnmatchedB">保存未匹配 B 到独立工作表</NCheckbox>
+        <NCheckbox v-model:checked="state.outputOptions.extraSheetConflicts">保存冲突数据到独立工作表</NCheckbox>
       </div>
-      <div style="margin-bottom:10px;font-size:0.9em;display:flex;gap:16px;flex-wrap:wrap;">
-        <label><input type="checkbox" v-model="state.outputOptions.extraSheetUnmatchedA"> 保存未匹配 A 到独立工作表</label>
-        <label><input type="checkbox" v-model="state.outputOptions.extraSheetUnmatchedB"> 保存未匹配 B 到独立工作表</label>
-        <label><input type="checkbox" v-model="state.outputOptions.extraSheetConflicts"> 保存冲突数据到独立工作表</label>
-      </div>
-      <div class="btn-group" style="align-items:center;">
-        <button class="btn btn-success" @click="downloadExcel">下载 Excel</button>
-        <button
-          class="btn btn-secondary"
+      <NSpace align="center" :size="12">
+        <NButton type="success" size="medium" @click="downloadExcel">下载 Excel</NButton>
+        <NButton
+          size="medium"
           :disabled="csvDisabled"
-          :style="{ opacity: csvDisabled ? 0.4 : 1, cursor: csvDisabled ? 'not-allowed' : '' }"
           @click="downloadCSV"
-        >下载 CSV</button>
-        <span v-if="csvDisabled" style="font-size:0.8em;color:#e74c3c;margin-left:4px;">
+        >下载 CSV</NButton>
+        <span v-if="csvDisabled" style="font-size: 0.8em; color: #e74c3c;">
           CSV 不支持多 Sheet 输出（已启用：{{ csvDisabledReasons.join('、') }}）
         </span>
-      </div>
+      </NSpace>
     </div>
   </div>
 </template>
 
 <script setup>
 import { inject, computed } from 'vue';
+import { NTabs, NTabPane, NGrid, NGridItem, NDataTable, NEmpty, NButton, NSpace, NCheckbox, NBadge } from 'naive-ui';
 import DataTable from './DataTable.vue';
 
 const { state, resolveConflict, resolveAllConflicts, downloadExcel, downloadCSV } = inject('appState');
+
+const unhandledConflictsCount = computed(() => {
+  return state.conflictKeys.filter(key => !state.conflictResolutions[key]).length;
+});
 
 const outputColNames = computed(() =>
   state.mergeResult ? state.mergeResult.outputCols.map(c => c.name) : []
@@ -238,23 +212,55 @@ const csvDisabledReasons = computed(() => {
   return r;
 });
 
-function toggleUnmatched(which, idx, checked) {
-  const sel = state.unmatchedSelection[which];
-  if (checked) {
-    if (!sel.includes(idx)) sel.push(idx);
-  } else {
-    const pos = sel.indexOf(idx);
-    if (pos !== -1) sel.splice(pos, 1);
-  }
+const conflictsTabLabel = computed(() => {
+  const n = state.conflictKeys.length;
+  return n > 0 ? `重复键冲突 (${n})` : '重复键冲突';
+});
+
+const filteredConflictKeys = computed(() => {
+  const search = (state.ui.conflictSearch || '').toLowerCase();
+  if (!search) return state.conflictKeys;
+  return state.conflictKeys.filter(key => key.toLowerCase().includes(search));
+});
+
+// ── Unmatched A ──
+function makeDataTableCols(colNames) {
+  return [
+    { type: 'selection', fixed: 'left', width: 48 },
+    ...colNames.map(c => ({
+      title: c,
+      key: c,
+      width: Math.min(Math.max(c.length * 10 + 24, 80), 200),
+      ellipsis: { tooltip: true },
+    })),
+  ];
 }
 
-function toggleAllUnmatched(which, checked) {
-  const r = state.mergeResult;
-  const list = which === 'A' ? r.unmatchedA : r.unmatchedB;
-  if (checked) {
-    state.unmatchedSelection[which] = list.map((_, i) => i);
-  } else {
-    state.unmatchedSelection[which] = [];
-  }
+const unmatchedAColumns = computed(() =>
+  state.mergeResult ? makeDataTableCols(state.mergeResult.colsA) : []
+);
+const unmatchedBColumns = computed(() =>
+  state.mergeResult ? makeDataTableCols(state.mergeResult.colsB) : []
+);
+
+const unmatchedAData = computed(() =>
+  state.mergeResult
+    ? state.mergeResult.unmatchedA.map((item, i) => ({ __idx: i, ...item._row }))
+    : []
+);
+const unmatchedBData = computed(() =>
+  state.mergeResult
+    ? state.mergeResult.unmatchedB.map((item, i) => ({ __idx: i, ...item._row }))
+    : []
+);
+
+function colScrollWidth(cols) {
+  return 48 + cols.reduce((sum, c) => sum + Math.min(Math.max(c.length * 10 + 24, 80), 200), 0);
 }
+const unmatchedAScrollWidth = computed(() =>
+  state.mergeResult ? colScrollWidth(state.mergeResult.colsA) : 0
+);
+const unmatchedBScrollWidth = computed(() =>
+  state.mergeResult ? colScrollWidth(state.mergeResult.colsB) : 0
+);
 </script>

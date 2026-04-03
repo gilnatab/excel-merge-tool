@@ -1,67 +1,60 @@
 <template>
-  <div class="upload-row">
-    <div
-      v-for="which in ['A', 'B']"
-      :key="which"
-      class="upload-area"
-      :class="{ 'has-file': which === 'A' ? !!state.workbookA : !!state.workbookB, dragover: dragover[which] }"
-      @click="triggerInput(which)"
-      @dragover.prevent="dragover[which] = true"
-      @dragleave="dragover[which] = false"
-      @drop.prevent="onDrop($event, which)"
-    >
-      <input
-        :ref="el => inputRefs[which] = el"
-        type="file"
+  <NGrid :cols="{ xs: 1, m: 2 }" :x-gap="16" :y-gap="16" responsive="screen">
+    <NGridItem v-for="which in ['A', 'B']" :key="which">
+      <div v-if="hasFile(which)" class="file-done-card">
+        <div style="flex: 1; min-width: 0;">
+          <div class="file-done-label">文件 {{ which }}</div>
+          <div class="file-done-name">{{ which === 'A' ? state.filenameA : state.filenameB }}</div>
+          <div class="file-done-status">✓ 已上传</div>
+        </div>
+        <NButton size="small" @click="onReset(which)">重新上传</NButton>
+      </div>
+
+      <NUpload
+        v-else
+        :key="uploadKeys[which]"
+        :custom-request="makeUploadRequest(which)"
         accept=".xlsx,.xls,.csv"
-        @change="onFileChange($event, which)"
+        :max="1"
+        :show-file-list="false"
       >
-      <span class="upload-label">文件 {{ which }}</span>
-      <span class="upload-hint">点击或拖拽上传 (.xlsx, .xls, .csv)</span>
-      <div class="upload-filename">{{ which === 'A' ? filenameA : filenameB }}</div>
-      <button
-        class="btn btn-sm btn-secondary reload-btn"
-        @click.stop="onReset(which)"
-      >重新上传</button>
-    </div>
-  </div>
+        <NUploadDragger>
+          <div class="upload-dragger-inner">
+            <div class="upload-dragger-icon">☁️</div>
+            <p class="upload-dragger-title">文件 {{ which }}</p>
+            <p class="upload-dragger-hint">点击或拖拽上传 .xlsx / .xls / .csv</p>
+          </div>
+        </NUploadDragger>
+      </NUpload>
+    </NGridItem>
+  </NGrid>
 </template>
 
 <script setup>
-import { inject, reactive, ref } from 'vue';
+import { inject, reactive } from 'vue';
+import { NGrid, NGridItem, NUpload, NUploadDragger, NButton } from 'naive-ui';
 
 const { state, handleFileUpload, resetFile } = inject('appState');
 
-const filenameA = ref('');
-const filenameB = ref('');
-const dragover = reactive({ A: false, B: false });
-const inputRefs = reactive({ A: null, B: null });
+const uploadKeys = reactive({ A: 0, B: 0 });
 
-function triggerInput(which) {
-  inputRefs[which]?.click();
+function hasFile(which) {
+  return which === 'A' ? !!state.workbookA : !!state.workbookB;
 }
 
-function onFileChange(e, which) {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (which === 'A') filenameA.value = file.name;
-  else filenameB.value = file.name;
-  handleFileUpload(which, file);
-}
-
-function onDrop(e, which) {
-  dragover[which] = false;
-  const file = e.dataTransfer.files[0];
-  if (!file) return;
-  if (which === 'A') filenameA.value = file.name;
-  else filenameB.value = file.name;
-  handleFileUpload(which, file);
+function makeUploadRequest(which) {
+  return ({ file, onFinish, onError }) => {
+    try {
+      handleFileUpload(which, file.file);
+      onFinish();
+    } catch {
+      onError();
+    }
+  };
 }
 
 function onReset(which) {
-  if (which === 'A') filenameA.value = '';
-  else filenameB.value = '';
-  if (inputRefs[which]) inputRefs[which].value = '';
+  uploadKeys[which]++;
   resetFile(which);
 }
 </script>

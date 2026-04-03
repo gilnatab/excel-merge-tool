@@ -7,6 +7,7 @@ import {
   buildUnmatchedRow,
   classifyMerge,
   sanitizeSheetName,
+  buildFinalOutput,
 } from '../src/utils/excel.js';
 
 // escAttr is no longer a production function (Vue templates auto-escape);
@@ -101,10 +102,13 @@ describe('resolveColumnNames', () => {
     assert.ok(!names.includes('score'));
   });
 
-  test('different key column names — key uses A name', () => {
+  test('different key column names — both keys included', () => {
     const result = resolveColumnNames(['code', 'val'], ['ref', 'desc'], 'code', 'ref');
-    assert.equal(result[0].name, 'code');
+    const names = result.map(c => c.name);
+    assert.ok(names.includes('code'));
+    assert.ok(names.includes('ref'));
     assert.equal(result[0].source, 'key');
+    assert.equal(result[1].source, 'keyB');
   });
 
   test('returns correct source metadata', () => {
@@ -274,6 +278,55 @@ describe('sanitizeSheetName', () => {
   test('passes clean names through unchanged', () => {
     assert.equal(sanitizeSheetName('Sheet1'), 'Sheet1');
     assert.equal(sanitizeSheetName('合并结果'), '合并结果');
+  });
+});
+
+describe('buildFinalOutput', () => {
+  const r = {
+    matched: [{ id: '1', name: 'Alice', city: 'NYC', __sheet__: 'S1' }],
+    unmatchedA: [{ _key: '2', _row: { id: '2', name: 'Bob', __sheet__: 'S1' } }],
+    unmatchedB: [{ _key: '3', _row: { id: '3', city: 'LA', __sheet__: 'S2' } }],
+    conflicts: {
+      '4': {
+        rowsA: [{ id: '4', name: 'CharlieA', __sheet__: 'S1' }],
+        rowsB: [{ id: '4', city: 'TokyoB', __sheet__: 'S2' }]
+      }
+    },
+    outputCols: [
+      { name: 'id', source: 'key' },
+      { name: 'name', source: 'A', original: 'name' },
+      { name: 'city', source: 'B', original: 'city' },
+    ],
+    keyColA: 'id',
+    keyColB: 'id'
+  };
+
+  test('combines matched and unmatched correctly', () => {
+    const rows = buildFinalOutput(r, { A: [0], B: [0] }, {}, []);
+    assert.equal(rows.length, 3);
+  });
+
+  test('defaults unhandled conflicts to "first"', () => {
+    const rows = buildFinalOutput(r, { A: [], B: [] }, {}, ['4']);
+    assert.equal(rows.length, 2);
+    const conflictRow = rows.find(row => row.id === '4');
+    assert.ok(conflictRow);
+    assert.equal(conflictRow.name, 'CharlieA');
+    assert.equal(conflictRow.city, 'TokyoB');
+  });
+
+  test('respects "all" resolution for conflicts', () => {
+    const r2 = {
+      ...r,
+      conflicts: {
+        '4': {
+          rowsA: [{ id: '4', name: 'A1' }, { id: '4', name: 'A2' }],
+          rowsB: [{ id: '4', city: 'B1' }]
+        }
+      }
+    };
+    const rows = buildFinalOutput(r2, { A: [], B: [] }, { '4': 'all' }, ['4']);
+    assert.equal(rows.length, 3); // 1 matched + 2 conflict rows
   });
 });
 

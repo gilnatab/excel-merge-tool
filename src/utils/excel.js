@@ -3,14 +3,18 @@ import * as XLSX from 'xlsx';
 // ── Sheet parsing ──
 
 export function parseSheetWithOffset(sheet, startRow) {
+  if (!sheet) return { headers: [], data: [] };
   const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-  const headerIdx = Math.max(0, startRow - 1);
+  if (!raw || raw.length === 0) return { headers: [], data: [] };
+
+  const headerIdx = Math.max(0, (startRow || 1) - 1);
   if (headerIdx >= raw.length) return { headers: [], data: [] };
+
   const rawHeaders = raw[headerIdx];
   const headers = [];
   const colIndices = [];
   for (let j = 0; j < rawHeaders.length; j++) {
-    const h = String(rawHeaders[j]).trim();
+    const h = String(rawHeaders[j] ?? '').trim();
     if (h !== '') { headers.push(h); colIndices.push(j); }
   }
   const data = [];
@@ -20,7 +24,7 @@ export function parseSheetWithOffset(sheet, startRow) {
       const j = colIndices[k];
       row[headers[k]] = raw[i] && raw[i][j] !== undefined ? raw[i][j] : '';
     }
-    const isEmpty = headers.every(h => String(row[h]).trim() === '');
+    const isEmpty = headers.every(h => String(row[h] ?? '').trim() === '');
     if (!isEmpty) data.push(row);
   }
   return { headers, data };
@@ -104,6 +108,14 @@ export function resolveColumnNames(colsA, colsB, keyColA, keyColB) {
   result.push({ name: keyColA, source: 'key' });
   usedNames.add(keyColA);
 
+  if (keyColB !== keyColA) {
+    let name = keyColB;
+    let suffix = 2;
+    while (usedNames.has(name)) { name = keyColB + '_' + suffix++; }
+    result.push({ name, source: 'keyB' });
+    usedNames.add(name);
+  }
+
   const nonKeyA = colsA.filter(c => c !== keyColA);
   const nonKeyB = colsB.filter(c => c !== keyColB);
   const bNameSet = new Set(nonKeyB);
@@ -135,6 +147,8 @@ export function mergeRow(rowA, rowB, outputCols, keyColA, keyColB) {
   for (const col of outputCols) {
     if (col.source === 'key') {
       out[col.name] = rowA[keyColA];
+    } else if (col.source === 'keyB') {
+      out[col.name] = rowB[keyColB];
     } else if (col.source === 'A') {
       out[col.name] = rowA[col.original] ?? '';
     } else {
@@ -150,6 +164,8 @@ export function buildUnmatchedRow(row, which, outputCols, keyColA, keyColB, keyV
   for (const col of outputCols) {
     if (col.source === 'key') {
       out[col.name] = keyValue;
+    } else if (col.source === 'keyB') {
+      out[col.name] = (which === 'B' ? keyValue : '');
     } else if (col.source === which) {
       out[col.name] = row[col.original] ?? '';
     } else {
@@ -192,17 +208,18 @@ export function combineSheetData(sheetConfigs, selection) {
 
   // Resolve selected cols for each sheet — normalize against current headers to remove stale names
   if (colsLinked) {
+    const keyCol0 = checkedConfigs[0].keyCol;
     const rawLinked = selection.linkedSelectedCols.length > 0
       ? selection.linkedSelectedCols
-      : checkedConfigs[0].headers.slice();
+      : [keyCol0].filter(Boolean);
     // Normalize against first checked sheet's actual headers
     const validLinked = rawLinked.filter(c => checkedConfigs[0].headers.includes(c));
-    const linked = validLinked.length > 0 ? validLinked : checkedConfigs[0].headers.slice();
+    const linked = validLinked.length > 0 ? validLinked : [keyCol0].filter(c => checkedConfigs[0].headers.includes(c));
     checkedConfigs.forEach(cfg => { cfg.selectedCols = linked; });
   } else {
     checkedConfigs.forEach(cfg => {
       const normalized = (cfg.selectedCols || []).filter(c => cfg.headers.includes(c));
-      cfg.selectedCols = normalized.length > 0 ? normalized : cfg.headers.slice();
+      cfg.selectedCols = normalized.length > 0 ? normalized : [cfg.keyCol].filter(c => cfg.headers.includes(c));
       // Ensure keyCol is always selected
       if (cfg.keyCol && !cfg.selectedCols.includes(cfg.keyCol)) {
         cfg.selectedCols = [cfg.keyCol, ...cfg.selectedCols];
@@ -256,7 +273,8 @@ export function buildFinalOutput(mergeResult, unmatchedSelection, conflictResolu
     if (item) rows.push(buildUnmatchedRow(item._row, 'B', r.outputCols, r.keyColA, r.keyColB, item._key));
   }
 
-  for (const [key, action] of Object.entries(conflictResolutions)) {
+  for (const key of (conflictKeys || [])) {
+    const action = conflictResolutions[key] || 'first';
     const group = r.conflicts[key];
     if (!group || action === 'remove') continue;
 

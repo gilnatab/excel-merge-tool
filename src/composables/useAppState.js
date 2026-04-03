@@ -38,6 +38,8 @@ function makeSelection() {
 const state = reactive({
   workbookA: null,
   workbookB: null,
+  filenameA: '',
+  filenameB: '',
   sheetConfigsA: [],
   sheetConfigsB: [],
   selection: {
@@ -61,6 +63,8 @@ const state = reactive({
   ui: {
     activeTab: 'matched',
     activeSteps: [1],
+    processing: false,
+    conflictSearch: '',
   },
 });
 
@@ -131,10 +135,12 @@ function refreshSheetData(which) {
       sel.linkedKeyCol = firstChecked.headers[0] || '';
     }
     if (sel.linkedSelectedCols.length === 0) {
-      sel.linkedSelectedCols = firstChecked.headers.slice();
+      sel.linkedSelectedCols = [sel.linkedKeyCol].filter(Boolean);
     } else {
       sel.linkedSelectedCols = sel.linkedSelectedCols.filter(c => firstChecked.headers.includes(c));
-      if (sel.linkedSelectedCols.length === 0) sel.linkedSelectedCols = firstChecked.headers.slice();
+      if (sel.linkedSelectedCols.length === 0) {
+        sel.linkedSelectedCols = [sel.linkedKeyCol].filter(Boolean);
+      }
     }
     // Invariant: linkedKeyCol must always be in linkedSelectedCols
     if (sel.linkedKeyCol && !sel.linkedSelectedCols.includes(sel.linkedKeyCol)) {
@@ -164,6 +170,9 @@ function checkEnableSteps() {
 // ── File upload/reset ──
 
 function handleFileUpload(which, file) {
+  if (which === 'A') state.filenameA = file.name;
+  else state.filenameB = file.name;
+
   const reader = new FileReader();
   reader.onload = e => {
     const data = new Uint8Array(e.target.result);
@@ -181,8 +190,15 @@ function handleFileUpload(which, file) {
 }
 
 function resetFile(which) {
-  if (which === 'A') { state.workbookA = null; state.sheetConfigsA = []; }
-  else { state.workbookB = null; state.sheetConfigsB = []; }
+  if (which === 'A') {
+    state.workbookA = null;
+    state.filenameA = '';
+    state.sheetConfigsA = [];
+  } else {
+    state.workbookB = null;
+    state.filenameB = '';
+    state.sheetConfigsB = [];
+  }
   resetFromStep(2, which);
 }
 
@@ -236,29 +252,36 @@ function toggleColsLinked(which) {
 
 // ── Run merge ──
 
-function runMerge() {
-  const { headers: hA, data: dA } = combineSheetData(state.sheetConfigsA, state.selection.A);
-  const { headers: hB, data: dB } = combineSheetData(state.sheetConfigsB, state.selection.B);
+async function runMerge() {
+  state.ui.processing = true;
+  await new Promise(resolve => setTimeout(resolve, 50)); // Allow UI to update
 
-  state.headersA = hA;
-  state.headersB = hB;
-  state.dataA = dA;
-  state.dataB = dB;
+  try {
+    const { headers: hA, data: dA } = combineSheetData(state.sheetConfigsA, state.selection.A);
+    const { headers: hB, data: dB } = combineSheetData(state.sheetConfigsB, state.selection.B);
 
-  const result = classifyMerge(dA, dB, hA[0], hB[0], hA, hB);
-  state.mergeResult = result;
-  state.conflictResolutions = {};
-  state.conflictKeys = Object.keys(result.conflicts);
-  state.unmatchedSelection = { A: [], B: [] };
+    state.headersA = hA;
+    state.headersB = hB;
+    state.dataA = dA;
+    state.dataB = dB;
 
-  const multiSheet = (
-    state.sheetConfigsA.filter(c => c.checked).length > 1 ||
-    state.sheetConfigsB.filter(c => c.checked).length > 1
-  );
-  state.outputOptions.keepSheetOutput = multiSheet;
+    const result = classifyMerge(dA, dB, hA[0], hB[0], hA, hB);
+    state.mergeResult = result;
+    state.conflictResolutions = {};
+    state.conflictKeys = Object.keys(result.conflicts);
+    state.unmatchedSelection = { A: [], B: [] };
 
-  enableStep(5);
-  state.ui.activeTab = 'matched';
+    const multiSheet = (
+      state.sheetConfigsA.filter(c => c.checked).length > 1 ||
+      state.sheetConfigsB.filter(c => c.checked).length > 1
+    );
+    state.outputOptions.keepSheetOutput = multiSheet;
+
+    enableStep(5);
+    state.ui.activeTab = 'matched';
+  } finally {
+    state.ui.processing = false;
+  }
 }
 
 // ── Conflict resolution ──
