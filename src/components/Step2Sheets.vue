@@ -1,75 +1,71 @@
 <template>
-  <NGrid :cols="{ xs: 1, m: 2 }" :x-gap="16" :y-gap="16" responsive="screen">
-    <NGridItem v-for="which in ['A', 'B']" :key="which">
-      <div style="font-weight: 600; font-size: 0.9em; color: #555; margin-bottom: 8px;">
-        文件 {{ which }} 工作表
-      </div>
-      <NSpace vertical :size="12" item-style="width: 100%">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div v-for="which in ['A', 'B']" :key="which">
+      <div class="font-semibold text-sm text-slate-500 mb-3">文件 {{ which }} 工作表</div>
+      <div class="flex flex-col gap-3">
         <div
           v-for="(cfg, idx) in (which === 'A' ? state.sheetConfigsA : state.sheetConfigsB)"
           :key="idx"
           class="sheet-item-group"
         >
           <div
-            class="sheet-check-item"
-            :class="{ 'is-checked': cfg.checked, 'has-preview': cfg.previewOpen && cfg.checked }"
+            class="flex items-center gap-3 p-3 border rounded-lg transition-colors"
+            :class="cfg.checked ? 'border-primary/40 bg-primary/5' : 'border-slate-200 bg-white'"
           >
-            <NCheckbox
-              :checked="cfg.checked"
-              @update:checked="(v) => onCheckChange(which, idx, v)"
-            />
-            <span class="sheet-name">{{ cfg.name }}</span>
-            <span class="sheet-extra">
-              <span class="sheet-start-row">
+            <input type="checkbox"
+                   :checked="cfg.checked"
+                   @change="onCheckChange(which, idx, $event.target.checked)"
+                   class="flex-shrink-0" />
+            <span class="sheet-name font-semibold text-sm text-slate-700 min-w-[60px]">{{ cfg.name }}</span>
+            <template v-if="cfg.checked">
+              <span class="flex items-center gap-2 text-sm text-slate-500">
                 起始行:
-                <NInputNumber
-                  :value="cfg.headerRow"
-                  :min="1"
-                  :precision="0"
-                  :show-button="true"
-                  size="small"
-                  style="width: 88px"
-                  @update:value="(v) => onStartRowChange(which, idx, v ?? 1)"
-                />
+                <input type="number" :value="cfg.headerRow" min="1" step="1"
+                       class="w-20"
+                       @change="onStartRowChange(which, idx, Number($event.target.value) || 1)" />
               </span>
-              <span class="sheet-row-count">{{ cfg.data.length }} 行</span>
-              <span class="preview-toggle" @click="cfg.previewOpen = !cfg.previewOpen">
+              <span class="text-xs text-slate-400">{{ cfg.data.length }} 行</span>
+              <button @click="cfg.previewOpen = !cfg.previewOpen"
+                      class="text-xs text-primary hover:underline ml-auto">
                 {{ cfg.previewOpen ? '▼' : '▶' }} 预览
-              </span>
-            </span>
-            <span v-if="cfg.headerHint" class="sheet-header-hint">
-              提示：第1行可能是标题行，建议将起始行改为 {{ cfg.headerHint.suggestedRow }}
-            </span>
-          </div>
-          <div v-if="cfg.previewOpen && cfg.checked" class="sheet-preview-wrap">
-            <template v-if="cfg.headers.length === 0">
-              <p style="color:#888; padding: 8px; font-size: 0.85em;">无数据</p>
+              </button>
             </template>
+          </div>
+          <div v-if="cfg.previewOpen && cfg.checked"
+               class="max-h-48 overflow-auto border border-t-0 border-slate-200 rounded-b-lg">
+            <p v-if="cfg.headers.length === 0" class="text-slate-400 text-sm p-3">无数据</p>
             <template v-else>
-              <table class="inline-table">
-                <thead>
-                  <tr><th v-for="h in cfg.headers" :key="h">{{ h }}</th></tr>
+              <table class="w-full text-xs border-collapse">
+                <thead class="bg-slate-50 sticky top-0">
+                  <tr>
+                    <th v-for="h in cfg.headers" :key="h"
+                        class="px-3 py-2 text-left font-semibold text-slate-500 whitespace-nowrap border-b border-slate-200">
+                      {{ h }}
+                    </th>
+                  </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(row, ri) in cfg.data.slice(0, 20)" :key="ri">
-                    <td v-for="h in cfg.headers" :key="h">{{ row[h] ?? '' }}</td>
+                  <tr v-for="(row, ri) in cfg.data.slice(0, 20)" :key="ri"
+                      class="border-b border-slate-100 hover:bg-slate-50">
+                    <td v-for="h in cfg.headers" :key="h" class="px-3 py-1.5 whitespace-nowrap text-slate-700">
+                      {{ row[h] ?? '' }}
+                    </td>
                   </tr>
                 </tbody>
               </table>
-              <div class="table-info-text" style="padding: 4px 10px;">
+              <div class="text-xs text-slate-400 px-3 py-1.5">
                 共 {{ cfg.data.length }} 行{{ cfg.data.length > 20 ? '，预览前 20 行' : '' }}
               </div>
             </template>
           </div>
         </div>
-      </NSpace>
-    </NGridItem>
-  </NGrid>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { inject } from 'vue';
-import { NGrid, NGridItem, NCheckbox, NInputNumber, NSpace } from 'naive-ui';
 
 const { state, onSheetCheckChange, onSheetStartRowChange } = inject('appState');
 

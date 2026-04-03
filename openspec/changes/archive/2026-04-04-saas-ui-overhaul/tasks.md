@@ -1,0 +1,28 @@
+# Tasks: SaaS UI Overhaul
+
+- [x] 1.1 Install tailwindcss@^4.2.2 and @tailwindcss/vite@^4.2.2; remove naive-ui from package.json
+- [x] 1.2 Add @tailwindcss/vite plugin to vite.config.js
+- [x] 1.3 Replace src/style.css with @import "tailwindcss" + @theme tokens + @layer base form resets + fade transition CSS
+- [x] 2.1 Rewrite App.vue template: wizard card shell with header progress bar, content area, footer nav
+- [x] 2.2 Add currentStep ref, canGoNext computed, stepCircleClass helper, progressLineWidth computed to App.vue script
+- [x] 2.3 Add watch to clamp currentStep when state.ui.activeSteps shrinks
+- [x] 2.4 Wire footer buttons: prevStep, nextStep, doRunMerge (advances to step 5 after merge), downloadExcel shortcut
+- [x] 2.5 Add processing overlay div (replaces NSpin) with animate-spin spinner
+- [x] 3.1 Rewrite Step1Upload.vue: native drag-and-drop upload zone per slot (A and B)
+- [x] 3.2 Implement processFile(which, file) shared handler; success only after FileReader.onload
+- [x] 3.3 Implement onReset clearing native input value for same-file re-select
+- [x] 3.4 Add data-testid attributes: upload-zone-a, upload-zone-b, done-card-a, done-card-b, reupload-a, reupload-b
+- [x] 4.1 Rewrite Step2Sheets.vue: native checkboxes with @change + $event.target.checked; number inputs with v-model.number; remove NCheckbox NInputNumber NGrid NSpace
+- [x] 4.2 Rewrite Step3KeyCols.vue: native <select> elements; remove NSelect NGrid NSpace
+- [x] 4.3 Rewrite Step4MergeCols.vue: native text input for search, native checkboxes for column list; remove internal 开始合并 NButton
+- [x] 4.4 Add data-testid to Next button (btn-next), Prev button (btn-prev), Merge button (btn-merge) in App.vue footer
+- [x] 5.1 Rewrite DataTable.vue: plain <table> with overflow-x-auto wrapper, editable-ready <span> cells, no NaiveUI deps
+- [x] 5.2 Rewrite Step5Results.vue tab bar: custom tab buttons with border-b-2 active state binding to state.ui.activeTab
+- [x] 5.3 Add tab badge counts; highlight conflicts badge red when unhandledConflictsCount > 0
+- [x] 5.4 Replace NDataTable unmatchedA/B tables with custom <table> + checkbox column; wire to state.unmatchedSelection.A/B
+- [x] 5.5 Rewrite conflict groups section: remove NSpace NBadge NEmpty NButton NGrid; use native buttons with Tailwind
+- [x] 5.6 Rewrite download section: native checkboxes for output options; keep all download logic from useAppState unchanged
+- [x] 5.7 Add data-testid: tab-matched, tab-unmatched, tab-conflicts, btn-download-excel, btn-download-csv
+- [x] 6.1 Update test/e2e/app.spec.js: replace all NaiveUI selectors (.n-tabs, .n-tabs-tab, .n-base-selection-label, .n-upload-dragger) with data-testid selectors
+- [x] 6.2 Add wizard navigation steps to E2E tests (click btn-next after upload to reach step 2, etc.)
+- [x] 6.3 Run full test suite: npm test && npm run test:integration && npm run test:e2e
