@@ -22,3 +22,7 @@ Desktop.ini
 node_modules/
 dist/
 dist-single/
+
+# Playwright
+test-results/
+playwright-report/
