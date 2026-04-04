@@ -1,0 +1,78 @@
+{
+  "scannedAt": "2026-04-04T11:59:09+08:00",
+  "truncated": false,
+  "coverage": {
+    "estimatedTotal": 22,
+    "scanned": 22,
+    "percentage": 100
+  },
+  "ignored": [
+    { "pattern": "node_modules/**", "reason": ".gitignore" },
+    { "pattern": "dist/**", "reason": ".gitignore" },
+    { "pattern": "dist-single/**", "reason": ".gitignore" },
+    { "pattern": ".ace-tool/**", "reason": ".gitignore" },
+    { "pattern": "test-results/**", "reason": ".gitignore" },
+    { "pattern": "playwright-report/**", "reason": ".gitignore" },
+    { "pattern": ".git/**", "reason": "default" }
+  ],
+  "root": {
+    "claudeMd": "CLAUDE.md",
+    "entry": "src/main.js",
+    "buildConfig": "vite.single.config.js"
+  },
+  "modules": [
+    {
+      "path": "src/composables",
+      "claudeMd": "src/composables/CLAUDE.md",
+      "entry": "src/composables/useAppState.js",
+      "language": "JavaScript",
+      "dependencies": ["vue", "xlsx", "src/utils/excel.js"],
+      "coverage": "complete",
+      "gaps": []
+    },
+    {
+      "path": "src/utils",
+      "claudeMd": "src/utils/CLAUDE.md",
+      "entry": "src/utils/excel.js",
+      "language": "JavaScript",
+      "dependencies": ["xlsx"],
+      "coverage": "complete",
+      "gaps": []
+    },
+    {
+      "path": "src/components",
+      "entry": [
+        "src/components/Step1Upload.vue",
+        "src/components/Step2Sheets.vue",
+        "src/components/Step3KeyCols.vue",
+        "src/components/Step4MergeCols.vue",
+        "src/components/Step5Results.vue",
+        "src/components/DataTable.vue"
+      ],
+      "language": "Vue SFC",
+      "dependencies": ["vue", "appState (inject)"],
+      "coverage": "complete",
+      "gaps": []
+    },
+    {
+      "path": "test",
+      "entry": [
+        "test/core.test.js",
+        "test/integration.test.js",
+        "test/e2e/app.spec.js"
+      ],
+      "language": "JavaScript",
+      "framework": ["node:test", "Playwright"],
+      "coverage": "complete",
+      "gaps": []
+    },
+    {
+      "path": "openspec",
+      "description": "OpenSpec 需求规格变更档案，非运行时代码",
+      "coverage": "complete",
+      "gaps": []
+    }
+  ],
+  "gaps": [],
+  "nextScan": null
+}
