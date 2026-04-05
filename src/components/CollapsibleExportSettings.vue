@@ -15,12 +15,7 @@
               class="flex h-10 w-10 items-center justify-center rounded-xl border border-outline-variant/40 bg-surface-container-low text-on-surface-variant transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary">
         <AppIcon name="chevron_left" class="w-4 h-4" />
       </button>
-      <div class="flex flex-col items-center gap-2 text-center">
-        <AppIcon name="settings" class="w-5 h-5 text-on-surface-variant" />
-        <span class="text-[11px] font-medium leading-4 text-on-surface-variant">
-          导出<br>设置
-        </span>
-      </div>
+      <AppIcon name="settings" class="w-5 h-5 text-on-surface-variant" />
     </div>
 
     <!-- Expanded: absolutely positioned so it overlays content below without affecting row height -->
