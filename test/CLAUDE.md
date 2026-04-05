@@ -8,6 +8,7 @@
 |------|------|------|----------|
 | 单元测试 | `npm run test:unit` | Node.js 内置 `node:test` | `src/utils/excel.js` 所有导出纯函数 |
 | 集成测试 | `npm run test:integration` | Node.js 内置 `node:test` | 使用 `.xlsx`/`.csv` fixture 文件的合并流程 |
+| 构建回归测试 | `npm run test:build-single` | Node.js 内置 `node:test` + Vite CLI | `build:single` 输出完整性；确保单文件 HTML 内联的是已编译 CSS，而非原始 Tailwind 指令 |
 | E2E 测试 | `npm run test:e2e` | Playwright (Chromium) | 完整 6 步向导流程，需要 `npm run dev` 在 5173 端口 |
 | 全部 | `npm run test:all` | — | 依次运行以上三层 |
 
@@ -35,6 +36,7 @@ npm run fixtures
 |------|------|
 | `core.test.js` | 单元测试：`buildIndex`、`resolveColumnNames`、`mergeRow`、`buildUnmatchedRow`、`classifyMerge`、`sanitizeSheetName`、`buildFinalOutput` |
 | `integration.test.js` | 集成测试：使用真实 xlsx/csv fixture 文件测试端到端解析与合并流程；含 multi-sheet unlinked 模式的 `combineSheetData` 验证 |
+| `build-single.test.js` | 构建回归测试：执行 `vite.single.config.js` 构建，校验 `index.html` 中 CSS 已内联且 Tailwind 指令已完全编译 |
 | `e2e/app.spec.js` | E2E 测试：Playwright 驱动浏览器完整走完 6 步向导，94 个测试用例覆盖 11 个测试套件 |
 
 ## E2E 测试套件索引

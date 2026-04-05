@@ -7,10 +7,11 @@
     "build": "vite build",
     "build:single": "vite build --config vite.single.config.js",
     "test": "node --test test/core.test.js",
+    "test:build-single": "node --test test/build-single.test.js",
     "test:integration": "node --test test/integration.test.js",
     "test:unit": "node --test test/core.test.js",
     "test:e2e": "playwright test",
-    "test:all": "node --test test/core.test.js && node --test test/integration.test.js && playwright test",
+    "test:all": "node --test test/core.test.js && node --test test/integration.test.js && node --test test/build-single.test.js && playwright test",
     "fixtures": "node test/fixtures/create-fixtures.js"
   },
   "dependencies": {
