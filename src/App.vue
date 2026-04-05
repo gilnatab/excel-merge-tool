@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen flex flex-col bg-surface font-sans">
+  <div class="h-screen flex flex-col bg-surface font-sans overflow-hidden">
     <!-- Processing overlay -->
     <div v-if="state.ui.processing"
          class="fixed inset-0 bg-white/70 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -15,7 +15,7 @@
         <!-- Logo -->
         <div class="flex items-center gap-2">
           <AppIcon name="grid_on" class="w-6 h-6 text-primary" />
-          <span class="font-semibold text-on-surface text-base">Excel 数据合并大师</span>
+          <span class="font-semibold text-on-surface text-base">Excel 数据合并工具</span>
         </div>
 
         <!-- Step indicator -->
@@ -41,11 +41,11 @@
       </div>
     </header>
 
-    <!-- Scrollable content -->
-    <main class="flex-1 overflow-y-auto px-6 py-8">
-      <div class="max-w-5xl mx-auto">
+    <!-- Content area: overflow-hidden so steps 2-5 fill window height exactly -->
+    <main class="flex-1 overflow-hidden flex flex-col px-6 py-6">
+      <div class="max-w-5xl mx-auto w-full flex-1 min-h-0 flex flex-col">
         <transition name="fade" mode="out-in">
-          <div :key="currentStep">
+          <div :key="currentStep" class="flex-1 min-h-0 flex flex-col">
             <Step1Upload v-if="currentStep === 1" />
             <Step2Sheets v-else-if="currentStep === 2" />
             <Step3KeyCols v-else-if="currentStep === 3" />

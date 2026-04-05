@@ -34,13 +34,20 @@ function onReset(which) {
 }
 ```
 
-## Upload Zone CSS States
+## Upload Zone CSS States (Precision Layer tokens)
 
 | State | Classes |
 |-------|---------|
-| Default | `border-2 border-dashed border-slate-200 rounded-xl` |
-| Dragging | `border-primary bg-primary/5` |
-| Hover | `hover:border-primary/50 hover:bg-slate-50` |
+| Default | `border-2 border-dashed border-primary-fixed rounded-2xl` |
+| Dragging | `border-primary bg-primary-fixed/30` |
+| Hover | `hover:border-primary hover:bg-surface-container-low` |
+
+## Success State
+
+When a file is loaded, the upload zone is replaced by a success card:
+- Emerald border: `border-2 border-emerald-200 bg-emerald-50`
+- `task_alt` icon via `<AppIcon name="task_alt" />`
+- Filename displayed, "重新上传" reset button
 
 ## PBT Properties
 

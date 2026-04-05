@@ -206,24 +206,18 @@ export function combineSheetData(sheetConfigs, selection) {
     });
   }
 
-  // Resolve selected cols for each sheet — normalize against current headers to remove stale names
+  // Resolve selected cols for each sheet - normalize against current headers to remove stale names
   if (colsLinked) {
     const keyCol0 = checkedConfigs[0].keyCol;
-    const rawLinked = selection.linkedSelectedCols.length > 0
-      ? selection.linkedSelectedCols
-      : [keyCol0].filter(Boolean);
-    // Normalize against first checked sheet's actual headers
-    const validLinked = rawLinked.filter(c => checkedConfigs[0].headers.includes(c));
-    const linked = validLinked.length > 0 ? validLinked : [keyCol0].filter(c => checkedConfigs[0].headers.includes(c));
-    checkedConfigs.forEach(cfg => { cfg.selectedCols = linked; });
+    const linked = (selection.linkedSelectedCols || []).filter(
+      c => c !== keyCol0 && checkedConfigs[0].headers.includes(c)
+    );
+    checkedConfigs.forEach(cfg => {
+      cfg.selectedCols = linked.filter(c => c !== cfg.keyCol && cfg.headers.includes(c));
+    });
   } else {
     checkedConfigs.forEach(cfg => {
-      const normalized = (cfg.selectedCols || []).filter(c => cfg.headers.includes(c));
-      cfg.selectedCols = normalized.length > 0 ? normalized : [cfg.keyCol].filter(c => cfg.headers.includes(c));
-      // Ensure keyCol is always selected
-      if (cfg.keyCol && !cfg.selectedCols.includes(cfg.keyCol)) {
-        cfg.selectedCols = [cfg.keyCol, ...cfg.selectedCols];
-      }
+      cfg.selectedCols = (cfg.selectedCols || []).filter(c => c !== cfg.keyCol && cfg.headers.includes(c));
     });
   }
 

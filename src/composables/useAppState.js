@@ -61,10 +61,11 @@ const state = reactive({
     extraSheetConflicts: false,
   },
   ui: {
-    activeTab: 'matched',
+    activeView: 'matched',
     activeSteps: [1],
     processing: false,
     conflictSearch: '',
+    exportSettingsCollapsed: false,
   },
 });
 
@@ -80,7 +81,7 @@ function disableStep(n) {
 
 // which: 'A' | 'B' | null (null = both sides)
 function resetFromStep(n, which = null) {
-  for (let i = n; i <= 5; i++) {
+  for (let i = n; i <= 6; i++) {
     if (i > 1) disableStep(i);
   }
   if (n <= 3) {
@@ -96,6 +97,7 @@ function resetFromStep(n, which = null) {
     state.conflictResolutions = {};
     state.conflictKeys = [];
     state.unmatchedSelection = { A: [], B: [] };
+    state.ui.activeView = 'matched';
   }
 }
 
@@ -116,9 +118,6 @@ function refreshSheetData(which) {
 
   configs.forEach(cfg => {
     if (!cfg.checked) {
-      cfg.headers = [];
-      cfg.data = [];
-      cfg.headerHint = null;
       return;
     }
     const sheet = wb.Sheets[cfg.name];
@@ -134,18 +133,9 @@ function refreshSheetData(which) {
     if (!firstChecked.headers.includes(sel.linkedKeyCol)) {
       sel.linkedKeyCol = firstChecked.headers[0] || '';
     }
-    if (sel.linkedSelectedCols.length === 0) {
-      sel.linkedSelectedCols = [sel.linkedKeyCol].filter(Boolean);
-    } else {
-      sel.linkedSelectedCols = sel.linkedSelectedCols.filter(c => firstChecked.headers.includes(c));
-      if (sel.linkedSelectedCols.length === 0) {
-        sel.linkedSelectedCols = [sel.linkedKeyCol].filter(Boolean);
-      }
-    }
-    // Invariant: linkedKeyCol must always be in linkedSelectedCols
-    if (sel.linkedKeyCol && !sel.linkedSelectedCols.includes(sel.linkedKeyCol)) {
-      sel.linkedSelectedCols = [sel.linkedKeyCol, ...sel.linkedSelectedCols];
-    }
+    sel.linkedSelectedCols = sel.linkedSelectedCols.filter(
+      c => c !== sel.linkedKeyCol && firstChecked.headers.includes(c)
+    );
   } else {
     sel.linkedKeyCol = '';
     sel.linkedSelectedCols = [];
@@ -224,12 +214,9 @@ function onSheetStartRowChange(which, idx, value) {
 // ── Key column changes ──
 
 function onKeyColChange() {
-  // Enforce: linkedKeyCol must be in linkedSelectedCols for each side
   for (const which of ['A', 'B']) {
     const sel = state.selection[which];
-    if (sel.linkedKeyCol && !sel.linkedSelectedCols.includes(sel.linkedKeyCol)) {
-      sel.linkedSelectedCols = [sel.linkedKeyCol, ...sel.linkedSelectedCols];
-    }
+    sel.linkedSelectedCols = sel.linkedSelectedCols.filter(c => c !== sel.linkedKeyCol);
   }
   resetFromStep(4);
   const hasA = state.sheetConfigsA.some(c => c.checked && c.headers.length > 0);
@@ -278,7 +265,8 @@ async function runMerge() {
     state.outputOptions.keepSheetOutput = multiSheet;
 
     enableStep(5);
-    state.ui.activeTab = 'matched';
+    enableStep(6);
+    state.ui.activeView = 'matched';
   } finally {
     state.ui.processing = false;
   }
@@ -292,8 +280,37 @@ function resolveConflict(ci, action) {
   state.conflictResolutions[key] = action;
 }
 
+function resolveConflictByKey(key, action) {
+  if (!state.conflictKeys.includes(key)) return;
+  state.conflictResolutions[key] = action;
+}
+
 function resolveAllConflicts(action) {
   state.conflictKeys.forEach((_, ci) => resolveConflict(ci, action));
+}
+
+function resetAll() {
+  state.workbookA = null;
+  state.workbookB = null;
+  state.filenameA = '';
+  state.filenameB = '';
+  state.sheetConfigsA = [];
+  state.sheetConfigsB = [];
+  state.selection.A = makeSelection();
+  state.selection.B = makeSelection();
+  state.headersA = [];
+  state.headersB = [];
+  state.dataA = [];
+  state.dataB = [];
+  state.mergeResult = null;
+  state.conflictResolutions = {};
+  state.conflictKeys = [];
+  state.unmatchedSelection = { A: [], B: [] };
+  state.outputOptions = { keepSheetOutput: false, extraSheetUnmatchedA: false, extraSheetUnmatchedB: false, extraSheetConflicts: false };
+  state.ui.activeSteps = [1];
+  state.ui.activeView = 'matched';
+  state.ui.conflictSearch = '';
+  state.ui.exportSettingsCollapsed = false;
 }
 
 // ── Download ──
@@ -390,7 +407,9 @@ export function useAppState() {
     toggleColsLinked,
     runMerge,
     resolveConflict,
+    resolveConflictByKey,
     resolveAllConflicts,
+    resetAll,
     downloadExcel,
     downloadCSV,
   };

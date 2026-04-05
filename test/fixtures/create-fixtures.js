@@ -1,7 +1,9 @@
 /**
  * Creates test fixture files:
- *   a.xlsx, b.xlsx, a.csv, b.csv  — standard single-sheet fixtures
- *   a_multi.xlsx, b_multi.xlsx    — multi-sheet fixtures for keepSheetOutput tests
+ *   a.xlsx, b.xlsx, a.csv, b.csv  - standard single-sheet fixtures
+ *   a_multi.xlsx, b_multi.xlsx    - multi-sheet fixtures for keepSheetOutput tests
+ *   a_wide.xlsx, b_wide.xlsx      - wide-column fixtures for preview regression tests
+ *   a_large.xlsx, b_large.xlsx    - multi-page fixtures for fullscreen pagination tests
  *
  * Run: node test/fixtures/create-fixtures.js
  *
@@ -39,6 +41,30 @@ const dataB = [
   { id: '4', city: 'Tokyo',  dept: 'Finance'     },  // unmatched B
   { id: '5', city: 'Boston', dept: 'HR'          },  // conflict match
 ];
+
+const dataA_wide = [
+  { id: '1', name: 'Alice',   score: 90, team: 'Alpha', level: 'L3', region: 'East' },
+  { id: '2', name: 'Bob',     score: 80, team: 'Beta',  level: 'L2', region: 'West' },
+  { id: '3', name: 'Charlie', score: 70, team: 'Gamma', level: 'L1', region: 'South' },
+];
+
+const dataB_wide = [
+  { id: '1', city: 'NYC',   dept: 'Engineering', country: 'US', building: 'HQ',    status: 'Active' },
+  { id: '2', city: 'LA',    dept: 'Marketing',   country: 'US', building: 'Annex', status: 'Active' },
+  { id: '4', city: 'Tokyo', dept: 'Finance',     country: 'JP', building: 'Tower', status: 'Pending' },
+];
+
+const dataA_large = Array.from({ length: 1240 }, (_, idx) => ({
+  id: String(idx + 1),
+  name: `Employee ${idx + 1}`,
+  score: 60 + (idx % 41),
+}));
+
+const dataB_large = Array.from({ length: 1240 }, (_, idx) => ({
+  id: String(idx + 1),
+  city: `City ${idx + 1}`,
+  dept: `Dept ${idx % 12}`,
+}));
 
 // ── Multi-sheet fixtures ──────────────────────────────────────────────────
 
@@ -99,6 +125,14 @@ writeXlsx(
   ]),
   join(__dirname, 'b_multi.xlsx')
 );
+
+// Wide-column regression fixtures
+writeXlsx(makeWorkbook([{ data: dataA_wide, name: 'WideEmployees'   }]), join(__dirname, 'a_wide.xlsx'));
+writeXlsx(makeWorkbook([{ data: dataB_wide, name: 'WideDepartments' }]), join(__dirname, 'b_wide.xlsx'));
+
+// Fullscreen pagination fixtures
+writeXlsx(makeWorkbook([{ data: dataA_large, name: 'LargeEmployees'   }]), join(__dirname, 'a_large.xlsx'));
+writeXlsx(makeWorkbook([{ data: dataB_large, name: 'LargeDepartments' }]), join(__dirname, 'b_large.xlsx'));
 
 // CSV (standard data only)
 const BOM = '\uFEFF';

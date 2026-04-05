@@ -1,23 +1,36 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary:       #4361EE;
-  --color-primary-hover: #3A56D4;
-  --color-success:       #2ecc71;
-  --color-warning:       #e67e22;
-  --color-danger:        #e74c3c;
+  --color-surface: #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+  --color-primary: #0058be;
+  --color-primary-container: #2170e4;
+  --color-primary-fixed: #d8e2ff;
+  --color-on-primary: #ffffff;
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #424754;
+  --color-outline-variant: #c2c6d6;
+  --color-error: #ba1a1a;
+  --color-secondary: #495e8a;
+  --color-tertiary: #924700;
+  --font-family-sans: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: var(--font-family-sans); }
 
   input[type="text"],
   input[type="number"],
   input[type="search"],
   select {
-    @apply border border-slate-200 rounded-lg px-3 py-2
+    @apply border border-outline-variant rounded-lg px-3 py-2
            focus:ring-2 focus:ring-primary/20 focus:border-primary
-           outline-none transition-all bg-white text-slate-800 text-sm;
+           outline-none transition-all bg-surface-container-lowest text-on-surface text-sm;
   }
   input[type="checkbox"] { accent-color: var(--color-primary); }
   button { cursor: pointer; }

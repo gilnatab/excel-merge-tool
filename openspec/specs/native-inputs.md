@@ -6,15 +6,13 @@ All native inputs emit string values by default. Explicit coercion is required:
 
 | Input type | Binding | Coercion |
 |-----------|---------|---------|
-| `<input type="number">` for `headerRow` | `v-model.number` or `@change="+$event.target.value"` | Must be integer ≥ 1 |
+| `<input type="number">` for `headerRow` | `@change="+(value) \|\| 1"` | Must be integer ≥ 1 |
 | `<input type="checkbox">` for sheet checked | `@change="onCheckChange(which, idx, $event.target.checked)"` | Boolean |
 | `<input type="checkbox">` for column selected | `@change="onColChange(which, h, $event.target.checked)"` | Boolean |
 | `<select>` for key column | `v-model="state.selection[which].linkedKeyCol"` | String (already correct) |
 | `<input type="text">` for search | `v-model="state.selection[which].colSearch"` | String (already correct) |
 
 ## Step 2 — Sheet Configuration
-
-Replaces: `NCheckbox`, `NInputNumber`
 
 ```html
 <!-- Sheet checkbox -->
@@ -30,23 +28,20 @@ Replaces: `NCheckbox`, `NInputNumber`
 
 ## Step 3 — Key Column
 
-Replaces: `NSelect`
-
 ```html
 <select v-model="state.selection[which].linkedKeyCol" @change="onKeyColChange">
   <option v-for="h in headerOptions(which)" :key="h" :value="h">{{ h }}</option>
 </select>
 ```
 
-**Invariant**: `linkedKeyCol` is always included in `linkedSelectedCols` (enforced by existing `onKeyColChange`).
+**Invariant**: `linkedKeyCol` is always included in `linkedSelectedCols` (enforced by `onKeyColChange`).
 
 ## Step 4 — Merge Columns
 
-Replaces: `NInput` (search), `NCheckbox` (column list), `NButton` (select all/merge)
-
-- Search filter: `v-model` on text input, filter applied via `v-show` (same as current)
+- Search filter: `v-model` on text input, filter applied via `v-show`
 - Column checkboxes: `@change` with `$event.target.checked`
-- **Remove**: internal `开始合并` `<NButton>` — this moves to App.vue footer
+- Join key row: rendered as a locked display row (checkbox disabled), not a real input
+- **No merge button in Step 4**: merge is triggered by `nextStep()` in App.vue when `currentStep === 4`. The footer "下一步" button changes its label to "开始合并" at step 4 (`data-testid="btn-next"`).
 - Keep: all `onLinkedColChange`, `selectAll`, `onPerSheetColChange` logic unchanged
 
 ## PBT Properties
@@ -55,3 +50,4 @@ Replaces: `NInput` (search), `NCheckbox` (column list), `NButton` (select all/me
 - **Checkbox sync**: native checkbox checked state always matches `cfg.checked` reactive value
 - **Key invariant**: `linkedKeyCol ∈ linkedSelectedCols` after every `onKeyColChange` call
 - **Search idempotency**: same search string always shows same subset of columns
+- **Merge trigger**: `btn-next` at step 4 is the sole merge trigger; no `btn-merge` exists

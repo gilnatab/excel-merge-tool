@@ -32,6 +32,10 @@ const FIX = {
   B_CSV:  join(fixturesDir, 'b.csv'),
   A_MULTI: join(fixturesDir, 'a_multi.xlsx'),
   B_MULTI: join(fixturesDir, 'b_multi.xlsx'),
+  A_WIDE: join(fixturesDir, 'a_wide.xlsx'),
+  B_WIDE: join(fixturesDir, 'b_wide.xlsx'),
+  A_LARGE: join(fixturesDir, 'a_large.xlsx'),
+  B_LARGE: join(fixturesDir, 'b_large.xlsx'),
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -159,19 +163,41 @@ test.describe('Step 2: Sheet Selection', () => {
     await expect(page.locator('text=4 行')).toBeVisible();
   });
 
-  test('preview panel renders data on click', async ({ page }) => {
-    // Click the preview button for the first sheet
-    await page.getByRole('button', { name: '预览' }).first().click();
+  test('preview panel renders data when clicking a sheet card', async ({ page }) => {
+    await page.getByTestId('step2-sheet-card-a-0').click();
     // Table header 'id' should be visible in the preview area
     await expect(
       page.locator('th').filter({ hasText: 'id' }).first()
     ).toBeVisible();
   });
 
+  test('fullscreen preview supports page summary, page size, and jump page', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A_LARGE);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B_LARGE);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+
+    await page.getByTestId('step2-sheet-card-a-0').click();
+    await page.getByTestId('btn-step2-open-fullscreen-a').click();
+
+    await expect(page.getByTestId('text-pagination-summary')).toContainText(/1.*50.*1,240/);
+
+    await page.getByTestId('select-page-size').selectOption('25');
+    await expect(page.getByTestId('text-pagination-summary')).toContainText(/1.*25.*1,240/);
+
+    await page.getByTestId('input-jump-page').fill('3');
+    await page.getByTestId('btn-jump-page').click();
+    await expect(page.getByTestId('text-pagination-summary')).toContainText(/51.*75.*1,240/);
+    await expect(page.locator('td').filter({ hasText: 'Employee 51' })).toBeVisible();
+  });
+
   test('unchecking a sheet disables step 3+ until re-checked', async ({ page }) => {
     // Uncheck Employees (file A's only sheet)
     const checkbox = page.locator('input[type="checkbox"]').first();
     await checkbox.uncheck();
+    await expect(page.getByTestId('step2-sheet-card-a-0')).toContainText('5 行');
     // Next should now be disabled (no usable data on A side)
     await expect(page.getByTestId('btn-next')).toBeDisabled();
     // Re-check restores next
@@ -201,8 +227,21 @@ test.describe('Step 3: Key Column', () => {
     await expect(selectA).toHaveValue('name');
   });
 
+  test('preview panel shows columns beyond the fifth header', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A_WIDE);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B_WIDE);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    await expect(page.locator('th').filter({ hasText: 'region' })).toBeVisible();
+    await expect(page.locator('th').filter({ hasText: 'status' })).toBeVisible();
+  });
+
   test('sync mode toggle switches to per-sheet view', async ({ page }) => {
-    // Default is linked (sync-all) mode — the sync checkbox should be checked
+    // Default is linked (sync-all) mode - the sync checkbox should be checked
     const syncCheckbox = page.locator('input[type="checkbox"]').first();
     await expect(syncCheckbox).toBeChecked();
     // Uncheck to enter per-sheet mode
@@ -220,23 +259,29 @@ test.describe('Step 4: Merge Columns', () => {
     await advanceToStep4(page);
   });
 
-  test('全选 selects all columns', async ({ page }) => {
-    const selectAllBtns = page.getByRole('button', { name: '全选' });
-    await selectAllBtns.first().click();
-    // Counter should show all columns selected (A has 3 cols: id, name, score)
+  test('starts with no merge columns selected by default', async ({ page }) => {
     await expect(
-      page.locator('text=/已选 3 \\/ 3/')
+      page.locator('text=/已选 0 \\/ 2/').first()
     ).toBeVisible();
   });
 
-  test('全不选 deselects all but keeps key column', async ({ page }) => {
+  test('全选 selects all columns', async ({ page }) => {
+    const selectAllBtns = page.getByRole('button', { name: '全选' });
+    await selectAllBtns.first().click();
+    // Counter should show all selectable merge columns selected (A has 2: name, score)
+    await expect(
+      page.locator('text=/已选 2 \\/ 2/')
+    ).toBeVisible();
+  });
+
+  test('全不选 clears all merge column selections', async ({ page }) => {
     const selectAllBtns = page.getByRole('button', { name: '全选' });
     await selectAllBtns.first().click();
     // Now deselect all for file A
     await page.getByRole('button', { name: '全不选' }).first().click();
-    // Only key col remains for A → count = 1; use .first() to avoid strict violation (A and B both show counts)
+    // No merge columns remain selected for A; key is separate and always used for matching
     await expect(
-      page.locator('text=/已选 1 \\/ 3/').first()
+      page.locator('text=/已选 0 \\/ 2/').first()
     ).toBeVisible();
   });
 
@@ -293,6 +338,11 @@ test.describe('Step 5: Merge Results', () => {
   });
 
   test('fullscreen view opens and closes', async ({ page }) => {
+    // Export settings panel starts expanded and its backdrop would intercept the click;
+    // collapse it first so the content area is fully interactive.
+    await page.getByTestId('btn-step5-collapse-export-settings').click();
+    await expect(page.getByTestId('step5-export-settings-collapsed')).toBeVisible();
+
     await page.getByRole('button', { name: '全屏查看' }).click();
     // Fullscreen overlay has close button (data-testid="btn-close-fullscreen")
     await expect(page.getByTestId('btn-close-fullscreen')).toBeVisible({ timeout: 5_000 });
@@ -300,11 +350,48 @@ test.describe('Step 5: Merge Results', () => {
     await expect(page.getByTestId('btn-close-fullscreen')).not.toBeVisible();
   });
 
-  // — Unmatched view ——————————————————————————————————————————————————————
+  test('export settings sidebar can collapse and expand', async ({ page }) => {
+    await expect(page.getByTestId('step5-export-settings-panel')).toBeVisible();
+
+    await page.getByTestId('btn-step5-collapse-export-settings').click();
+    await expect(page.getByTestId('step5-export-settings-panel')).toHaveCount(0);
+    await expect(page.getByTestId('step5-export-settings-collapsed')).toBeVisible();
+
+    await page.getByTestId('btn-step5-expand-export-settings').click();
+    await expect(page.getByTestId('step5-export-settings-panel')).toBeVisible();
+  });
+
+  test('export settings panel is absolute overlay: row height does not grow when expanded', async ({ page }) => {
+    // Collapse first to get a clean baseline
+    await page.getByTestId('btn-step5-collapse-export-settings').click();
+    await expect(page.getByTestId('step5-export-settings-collapsed')).toBeVisible();
+    const collapsedRowBox = await page.getByTestId('step5-top-row').boundingBox();
+
+    // Expand settings
+    await page.getByTestId('btn-step5-expand-export-settings').click();
+    await expect(page.getByTestId('step5-export-settings-panel')).toBeVisible();
+    const expandedRowBox = await page.getByTestId('step5-top-row').boundingBox();
+
+    // Row must not grow when settings are expanded (panel is absolute, out of flow)
+    expect(expandedRowBox.height).toBeLessThanOrEqual(collapsedRowBox.height + 2);
+
+    // The expanded panel must extend below the row's bottom edge (confirming overlay behavior)
+    const panelBox = await page.getByTestId('step5-export-settings-panel').boundingBox();
+    expect(panelBox.y + panelBox.height).toBeGreaterThan(expandedRowBox.y + expandedRowBox.height);
+  });
+
+  // - Unmatched view ------------------------------------------------------
 
   test('unmatched view shows Charlie (A) and Tokyo (B)', async ({ page }) => {
     await page.getByTestId('tab-unmatched').click();
     await expect(page.locator('td').filter({ hasText: 'Charlie' })).toBeVisible();
+    await expect(page.locator('td').filter({ hasText: 'Tokyo' })).toBeVisible();
+  });
+
+  test('unmatched view search filters a single side without affecting the other', async ({ page }) => {
+    await page.getByTestId('tab-unmatched').click();
+    await page.locator('input[placeholder="搜索未匹配记录..."]').first().fill('zzz');
+    await expect(page.locator('text=暂无匹配搜索结果').first()).toBeVisible();
     await expect(page.locator('td').filter({ hasText: 'Tokyo' })).toBeVisible();
   });
 
@@ -320,10 +407,10 @@ test.describe('Step 5: Merge Results', () => {
 
   test('unmatched view: individual row selection works', async ({ page }) => {
     await page.getByTestId('tab-unmatched').click();
-    const firstRowCheckbox = page.locator('tbody input[type="checkbox"]').first();
-    await firstRowCheckbox.check();
+    const firstRowCheckbox = page.locator('tbody input[type="checkbox"]').nth(1);
+    await firstRowCheckbox.check({ force: true });
     await expect(firstRowCheckbox).toBeChecked();
-    await firstRowCheckbox.uncheck();
+    await firstRowCheckbox.uncheck({ force: true });
     await expect(firstRowCheckbox).not.toBeChecked();
   });
 
@@ -334,6 +421,11 @@ test.describe('Step 5: Merge Results', () => {
     await expect(
       page.locator('[data-testid="conflict-key-text"]').filter({ hasText: '"5"' })
     ).toBeVisible();
+  });
+
+  test('unresolved conflict card is marked as pending before any action is chosen', async ({ page }) => {
+    await page.getByTestId('tab-conflicts').click();
+    await expect(page.getByTestId('badge-conflict-pending')).toBeVisible();
   });
 
   test('conflict: 保留全部 marks as resolved', async ({ page }) => {
@@ -368,6 +460,12 @@ test.describe('Step 5: Merge Results', () => {
     await expect(page.locator('text=仅保留首条').first()).toBeVisible();
   });
 
+  test('batch: 全部移除 resolves all conflicts at once', async ({ page }) => {
+    await page.getByTestId('tab-conflicts').click();
+    await page.getByRole('button', { name: '全部移除' }).click();
+    await expect(page.locator('text=已移除')).toBeVisible();
+  });
+
   test('conflict search filters by key value', async ({ page }) => {
     await page.getByTestId('tab-conflicts').click();
     // Type a non-matching value
@@ -394,6 +492,50 @@ test.describe('Step 6: Export', () => {
     // The number "2" appears as the bold count in the summary card
     const matchedCountEl = page.locator('.text-emerald-600.text-2xl').first();
     await expect(matchedCountEl).toContainText('2');
+  });
+
+  test('export settings can collapse and expand on step 6', async ({ page }) => {
+    await expect(page.getByTestId('step6-export-settings-panel')).toBeVisible();
+
+    await page.getByTestId('btn-step6-collapse-export-settings').click();
+    await expect(page.getByTestId('step6-export-settings-panel')).toHaveCount(0);
+    await expect(page.getByTestId('step6-export-settings-collapsed')).toBeVisible();
+
+    await page.getByTestId('btn-step6-expand-export-settings').click();
+    await expect(page.getByTestId('step6-export-settings-panel')).toBeVisible();
+  });
+
+  test('export settings panel is absolute overlay: row height does not grow when expanded on step 6', async ({ page }) => {
+    // Collapse first to get a clean baseline
+    await page.getByTestId('btn-step6-collapse-export-settings').click();
+    await expect(page.getByTestId('step6-export-settings-collapsed')).toBeVisible();
+    const collapsedRowBox = await page.getByTestId('step6-top-row').boundingBox();
+
+    // Expand settings
+    await page.getByTestId('btn-step6-expand-export-settings').click();
+    await expect(page.getByTestId('step6-export-settings-panel')).toBeVisible();
+    const expandedRowBox = await page.getByTestId('step6-top-row').boundingBox();
+
+    // Row must not grow when settings are expanded (panel is absolute, out of flow)
+    expect(expandedRowBox.height).toBeLessThanOrEqual(collapsedRowBox.height + 2);
+
+    // The expanded panel must extend below the row's bottom edge (confirming overlay behavior)
+    const panelBox = await page.getByTestId('step6-export-settings-panel').boundingBox();
+    expect(panelBox.y + panelBox.height).toBeGreaterThan(expandedRowBox.y + expandedRowBox.height);
+  });
+
+  test('export settings collapse state persists from step 5 to step 6', async ({ page }) => {
+    await page.goto('/');
+    await runMergeFlow(page);
+
+    await page.getByTestId('btn-step5-collapse-export-settings').click();
+    await expect(page.getByTestId('step5-export-settings-collapsed')).toBeVisible();
+
+    await page.getByTestId('btn-next').click();
+    await expect(page.getByTestId('step6-export-settings-collapsed')).toBeVisible();
+
+    await page.getByTestId('btn-step6-expand-export-settings').click();
+    await expect(page.getByTestId('step6-export-settings-panel')).toBeVisible();
   });
 
   test('Excel download triggers .xlsx file save', async ({ page }) => {

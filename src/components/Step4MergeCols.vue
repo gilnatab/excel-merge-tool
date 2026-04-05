@@ -1,93 +1,86 @@
 <template>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <div v-for="which in ['A', 'B']" :key="which">
-      <div class="font-semibold text-sm text-slate-500 mb-3">文件 {{ which }} 列</div>
-
-      <template v-if="checkedConfigs(which).length === 0">
-        <p class="text-slate-400 text-sm">请先勾选工作表</p>
-      </template>
-
-      <template v-else-if="state.selection[which].colsLinked || checkedConfigs(which).length === 1">
-        <div class="flex gap-2 items-center mb-2">
-          <input type="text" v-model="state.selection[which].colSearch"
-                 placeholder="搜索列名..." class="flex-1" />
-          <span class="text-xs text-primary bg-primary/10 px-2 py-1 rounded whitespace-nowrap">
-            已选 {{ getSelectedCount(which) }} / {{ checkedConfigs(which)[0].cfg.headers.length }}
-          </span>
-        </div>
-        <div class="flex gap-2 mb-2">
-          <button @click="selectAll(which, true)"
-                  class="text-xs text-primary hover:underline">全选</button>
-          <span class="text-slate-300">|</span>
-          <button @click="selectAll(which, false)"
-                  class="text-xs text-primary hover:underline">全不选</button>
-        </div>
-        <div class="max-h-56 overflow-y-auto border border-slate-200 rounded-lg p-1">
-          <template v-for="h in checkedConfigs(which)[0].cfg.headers" :key="h">
-            <label
-              v-show="!state.selection[which].colSearch || h.toLowerCase().includes(state.selection[which].colSearch.toLowerCase())"
-              class="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-slate-50 cursor-pointer text-sm"
-              :class="h === linkedKeyCol(which) ? 'opacity-50 cursor-default' : ''"
-            >
-              <input type="checkbox"
-                     :checked="isLinkedColSelected(which, h)"
-                     :disabled="h === linkedKeyCol(which)"
-                     @change="h !== linkedKeyCol(which) && onLinkedColChange(which, h, $event.target.checked)" />
-              <span>{{ h }}</span>
-            </label>
-          </template>
-        </div>
-        <a v-if="checkedConfigs(which).length > 1"
-           class="block mt-2 text-xs text-primary cursor-pointer hover:underline"
-           @click="toggleLinked(which)">独立配置各工作表</a>
-      </template>
-
-      <template v-else>
-        <div class="flex flex-col gap-3">
-          <div v-for="item in checkedConfigs(which)" :key="item.idx"
-               class="border border-slate-200 rounded-lg p-3">
-            <div class="text-xs font-semibold text-primary mb-2">{{ item.cfg.name }}</div>
-            <div class="flex gap-2 items-center mb-2">
-              <input type="text"
-                     v-model="state.selection[which].perSheetColSearch[item.idx]"
-                     placeholder="搜索列名..." class="flex-1" />
-              <span class="text-xs text-primary bg-primary/10 px-2 py-1 rounded whitespace-nowrap">
-                已选 {{ getPerSheetSelectedCount(item.cfg) }} / {{ item.cfg.headers.length }}
-              </span>
-            </div>
-            <div class="flex gap-2 mb-2">
-              <button @click="selectAllPerSheet(item.cfg, true)"
-                      class="text-xs text-primary hover:underline">全选</button>
-              <span class="text-slate-300">|</span>
-              <button @click="selectAllPerSheet(item.cfg, false)"
-                      class="text-xs text-primary hover:underline">全不选</button>
-            </div>
-            <div class="max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-1">
-              <label
-                v-for="h in item.cfg.headers"
-                :key="h"
-                v-show="!state.selection[which].perSheetColSearch[item.idx] || h.toLowerCase().includes((state.selection[which].perSheetColSearch[item.idx] || '').toLowerCase())"
-                class="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-slate-50 cursor-pointer text-sm"
-                :class="h === item.cfg.keyCol ? 'opacity-50 cursor-default' : ''"
-              >
-                <input type="checkbox"
-                       :checked="isPerSheetColSelected(item.cfg, h)"
-                       :disabled="h === item.cfg.keyCol"
-                       @change="h !== item.cfg.keyCol && onPerSheetColChange(item.cfg, h, $event.target.checked)" />
-                <span>{{ h }}</span>
-              </label>
-            </div>
+  <div class="max-w-5xl mx-auto w-full flex-1 min-h-0 flex flex-col">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
+      <div v-for="which in ['A', 'B']" :key="which"
+           class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 flex flex-col min-h-0">
+        <div class="px-5 py-4 border-b border-outline-variant/30 shrink-0">
+          <div class="flex items-center justify-between mb-3">
+            <span class="font-semibold text-on-surface">文件 {{ which }}</span>
+            <span class="text-xs text-on-surface-variant bg-surface-container-low px-2 py-1 rounded-full">
+              已选 {{ getSelectedCount(which) }} / {{ totalCols(which) }}
+            </span>
+          </div>
+          <!-- Search -->
+          <div class="relative mb-2">
+            <AppIcon name="search" class="w-4 h-4 text-on-surface-variant/50 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input type="text" v-model="state.selection[which].colSearch"
+                   placeholder="搜索列名..." class="w-full pl-9 pr-3 text-sm" />
+          </div>
+          <!-- Select all / none -->
+          <div class="flex gap-3 text-xs">
+            <button @click="selectAll(which, true)"
+                    class="text-primary hover:underline font-medium">全选</button>
+            <span class="text-outline-variant">|</span>
+            <button @click="selectAll(which, false)"
+                    class="text-on-surface-variant hover:underline">全不选</button>
           </div>
         </div>
-        <a class="block mt-2 text-xs text-primary cursor-pointer hover:underline"
-           @click="toggleLinked(which)">同步所有工作表</a>
-      </template>
+
+        <div class="flex-1 overflow-y-auto p-2">
+          <template v-if="checkedConfigs(which).length === 0">
+            <p class="text-on-surface-variant text-sm p-4">请先勾选工作表</p>
+          </template>
+          <template v-else-if="state.selection[which].colsLinked || checkedConfigs(which).length === 1">
+            <!-- Locked join key row -->
+            <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-fixed/50 mb-1">
+              <AppIcon name="lock" class="w-4 h-4 text-primary shrink-0" />
+              <span class="text-sm text-on-surface font-medium flex-1">{{ linkedKeyCol(which) }}</span>
+              <span class="text-xs text-primary font-semibold">关联键</span>
+            </div>
+            <!-- Other columns -->
+            <template v-for="h in checkedConfigs(which)[0].cfg.headers" :key="h">
+              <label
+                v-if="h !== linkedKeyCol(which)"
+                v-show="!state.selection[which].colSearch || h.toLowerCase().includes(state.selection[which].colSearch.toLowerCase())"
+                class="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-container-low cursor-pointer text-sm transition-colors">
+                <input type="checkbox"
+                       :checked="isLinkedColSelected(which, h)"
+                       @change="onLinkedColChange(which, h, $event.target.checked)" />
+                <span class="text-on-surface">{{ h }}</span>
+              </label>
+            </template>
+          </template>
+          <template v-else>
+            <!-- Per-sheet independent -->
+            <div v-for="item in checkedConfigs(which)" :key="item.idx" class="mb-4">
+              <div class="text-xs font-semibold text-primary mb-1 px-3">{{ item.cfg.name }}</div>
+              <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-fixed/50 mb-1">
+                <AppIcon name="lock" class="w-4 h-4 text-primary shrink-0" />
+                <span class="text-sm text-on-surface font-medium flex-1">{{ item.cfg.keyCol }}</span>
+                <span class="text-xs text-primary font-semibold">关联键</span>
+              </div>
+              <template v-for="h in item.cfg.headers" :key="h">
+                <label
+                  v-if="h !== item.cfg.keyCol"
+                  v-show="!state.selection[which].perSheetColSearch[item.idx] || h.toLowerCase().includes((state.selection[which].perSheetColSearch[item.idx] || '').toLowerCase())"
+                  class="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-container-low cursor-pointer text-sm transition-colors">
+                  <input type="checkbox"
+                         :checked="isPerSheetColSelected(item.cfg, h)"
+                         @change="onPerSheetColChange(item.cfg, h, $event.target.checked)" />
+                  <span class="text-on-surface">{{ h }}</span>
+                </label>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { inject } from 'vue';
+import AppIcon from './AppIcon.vue';
 
 const { state, toggleColsLinked } = inject('appState');
 
@@ -103,6 +96,34 @@ function linkedKeyCol(which) {
   const first = checkedConfigs(which)[0];
   if (!first) return '';
   return sel.keyLinked || checkedConfigs(which).length === 1 ? sel.linkedKeyCol : first.cfg.keyCol;
+}
+
+function totalCols(which) {
+  const items = checkedConfigs(which);
+  if (items.length === 0) return 0;
+
+  if (state.selection[which].colsLinked || items.length === 1) {
+    const keyCol = linkedKeyCol(which);
+    return items[0].cfg.headers.filter(h => h !== keyCol).length;
+  }
+
+  return items.reduce((sum, { cfg }) => (
+    sum + cfg.headers.filter(h => h !== cfg.keyCol).length
+  ), 0);
+}
+
+function getSelectedCount(which) {
+  const items = checkedConfigs(which);
+  if (items.length === 0) return 0;
+
+  if (state.selection[which].colsLinked || items.length === 1) {
+    const keyCol = linkedKeyCol(which);
+    return state.selection[which].linkedSelectedCols.filter(h => h !== keyCol).length;
+  }
+
+  return items.reduce((sum, { cfg }) => (
+    sum + (cfg.selectedCols || []).filter(h => h !== cfg.keyCol).length
+  ), 0);
 }
 
 function isLinkedColSelected(which, h) {
@@ -126,9 +147,9 @@ function selectAll(which, checked) {
   if (!first) return;
   const keyCol = linkedKeyCol(which);
   if (checked) {
-    sel.linkedSelectedCols = first.cfg.headers.slice();
+    sel.linkedSelectedCols = first.cfg.headers.filter(h => h !== keyCol);
   } else {
-    sel.linkedSelectedCols = [keyCol].filter(Boolean);
+    sel.linkedSelectedCols = [];
   }
 }
 
@@ -146,23 +167,7 @@ function onPerSheetColChange(cfg, h, checked) {
   }
 }
 
-function selectAllPerSheet(cfg, checked) {
-  if (checked) {
-    cfg.selectedCols = cfg.headers.slice();
-  } else {
-    cfg.selectedCols = [cfg.keyCol].filter(Boolean);
-  }
-}
-
 function toggleLinked(which) {
   toggleColsLinked(which);
-}
-
-function getSelectedCount(which) {
-  return state.selection[which].linkedSelectedCols.length;
-}
-
-function getPerSheetSelectedCount(cfg) {
-  return (cfg.selectedCols || []).length;
 }
 </script>

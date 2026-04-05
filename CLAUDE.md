@@ -30,10 +30,10 @@
 ```mermaid
 graph TD
     A["(根) excel-merge-tool"] --> B["src/"]
-    B --> C["App.vue — 向导外壳"]
+    B --> C["App.vue — 6步向导外壳"]
     B --> D["main.js — Vue 入口"]
     B --> F["composables/useAppState.js"]
-    B --> G["components/ — Step1~5 + DataTable"]
+    B --> G["components/ — Step1~6 + 共享组件"]
     B --> H["utils/excel.js"]
     A --> I["test/ — unit / integration / e2e"]
     A --> J["openspec/ — 需求规格档案"]
@@ -42,6 +42,23 @@ graph TD
     click H "src/utils/CLAUDE.md" "utils 文档"
     click I "test/CLAUDE.md" "测试策略"
 ```
+
+### 组件清单
+
+| 组件 | 职责 |
+|------|------|
+| `App.vue` | 6 步向导外壳：步骤指示器、上一步/下一步导航、处理遮罩 |
+| `Step1Upload.vue` | 文件上传（xlsx/csv），拖拽或点击，双文件区域 |
+| `Step2Sheets.vue` | 工作表选择、预览、起始行配置 |
+| `Step3KeyCols.vue` | 关联键列设置，联动/独立模式切换 |
+| `Step4MergeCols.vue` | 合并列选择，全选/全不选/搜索 |
+| `Step5Results.vue` | 合并结果查看：匹配/未匹配/冲突三视图，内联预览 + 全屏 |
+| `Step6Export.vue` | 导出摘要、下载 Excel/CSV、重新开始 |
+| `CollapsibleExportSettings.vue` | 可折叠导出设置面板；展开时为 `position:absolute` 浮层不影响行高；点击外部（capture 阶段，`setTimeout(0)` 延迟绑定）自动收起 |
+| `ExportSettings.vue` | 导出选项表单（4 个复选框 + CSV 禁用提示），被 CollapsibleExportSettings 嵌入 |
+| `DataTable.vue` | 分页表格，支持普通模式和全屏（Teleport to body）模式，含搜索/跳页 |
+| `InlinePreviewTable.vue` | 轻量行内预览表格，基于视口高度（ResizeObserver + rAF）自动限制显示行数 |
+| `AppIcon.vue` | SVG 图标组件，内联 Material Design SVG 路径 |
 
 ---
 
@@ -73,11 +90,12 @@ npm run test:all     # 运行全部测试（unit + integration + e2e）
 ## AI 使用指引
 
 - 修改 `src/utils/excel.js` 中的纯函数后，**必须同步更新** `test/core.test.js` 和 `test/integration.test.js`
-- 修改状态字段或 composable 导出接口时，**必须检查** 所有 `inject('appState')` 调用点（5 个 Step 组件均使用）
-- `outputOptions.keepSheetOutput`、`extraSheetUnmatchedA/B`、`extraSheetConflicts` 这 4 个选项控制 CSV 可用性，逻辑在 `Step5Results.vue` 的 `csvDisabled` computed 中，修改时注意联动
+- 修改状态字段或 composable 导出接口时，**必须检查** 所有 `inject('appState')` 调用点（Step1~6 + CollapsibleExportSettings 共 7 处）
+- `outputOptions.keepSheetOutput`、`extraSheetUnmatchedA/B`、`extraSheetConflicts` 这 4 个选项控制 CSV 可用性，逻辑在 `Step6Export.vue` 的 `csvDisabled` computed 中，修改时注意联动
 - `state.ui.activeSteps` 数组控制步骤激活，通过 `enableStep(n)` / `disableStep(n)` 操作，不要直接赋值
+- `CollapsibleExportSettings` 展开状态使用 `position:absolute z-20` 浮层；不可改为 in-flow，否则会撑高父行导致下方数据区被压缩
 - `openspec/` 目录仅为规格档案，不包含运行时代码，不需要在构建中处理
 
 ---
 
-*自动生成于 2026-04-04，覆盖率 100%*
+*更新于 2026-04-05，覆盖率 100%*
