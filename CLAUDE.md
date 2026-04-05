@@ -74,6 +74,17 @@ npm run test:all     # 运行全部测试（unit + integration + e2e）
 
 ---
 
+## CI / CD
+
+| 工作流 | 触发条件 | 执行内容 |
+|--------|----------|----------|
+| `pages.yml` | push 到 `master` / `main`，或手动触发 | 运行 `test:unit` + `test:integration` + `test:build-single` → `build` → 部署到 GitHub Pages |
+| `release.yml` | push `v*` tag（如 `v1.2.3`） | 运行 `test:unit` + `test:integration` + `test:build-single` → `build:single` → 创建 GitHub Release 并附带 `index.html` |
+
+两条工作流均以 `test:unit + test:integration + test:build-single` 为部署门控，E2E 测试不含在 CI 门控中（需要本地 dev server）。
+
+---
+
 ## 编码规范
 
 - **XSS 防护**：Vue 模板自动转义 HTML 内容；属性值通过 Vue 绑定（`:attr="val"`）传入，不拼接字符串
@@ -99,4 +110,4 @@ npm run test:all     # 运行全部测试（unit + integration + e2e）
 
 ---
 
-*更新于 2026-04-06，覆盖率 100%*
+*更新于 2026-04-06（二次更新），覆盖率 100%*

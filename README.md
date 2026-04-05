@@ -31,6 +31,11 @@ npm run build          # 多文件构建 → dist/
 npm run build:single   # 单文件构建 → dist-single/index.html（所有资源内联）
 ```
 
+## 自动发布
+
+- 推送到默认分支（当前仓库是 `master`）后，GitHub Actions 会自动构建并部署最新站点到 GitHub Pages
+- 推送形如 `v1.2.3` 的 tag 后，GitHub Actions 会自动创建 Release，并附带单文件版 `index.html`
+
 ## 测试
 
 ```bash
