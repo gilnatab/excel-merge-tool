@@ -50,8 +50,8 @@ graph TD
 | `App.vue` | 6 步向导外壳：步骤指示器、上一步/下一步导航、处理遮罩 |
 | `Step1Upload.vue` | 文件上传（xlsx/csv），拖拽或点击，双文件区域 |
 | `Step2Sheets.vue` | 工作表选择、预览、起始行配置 |
-| `Step3KeyCols.vue` | 关联键列设置，联动/独立模式切换 |
-| `Step4MergeCols.vue` | 合并列选择，全选/全不选/搜索 |
+| `Step3KeyCols.vue` | 关联键列设置，联动/独立模式切换；多 sheet 时计算公共列交集，无公共列自动禁用联动并提示；独立模式下含数据内联预览 |
+| `Step4MergeCols.vue` | 合并列选择，全选/全不选/搜索；独立模式下每个 sheet 可折叠，支持按 sheet 独立搜索 |
 | `Step5Results.vue` | 合并结果查看：匹配/未匹配/冲突三视图，内联预览 + 全屏 |
 | `Step6Export.vue` | 导出摘要、下载 Excel/CSV、重新开始 |
 | `CollapsibleExportSettings.vue` | 可折叠导出设置面板；展开时为 `position:absolute` 浮层不影响行高；点击外部（capture 阶段，`setTimeout(0)` 延迟绑定）自动收起 |
@@ -91,6 +91,7 @@ npm run test:all     # 运行全部测试（unit + integration + e2e）
 
 - 修改 `src/utils/excel.js` 中的纯函数后，**必须同步更新** `test/core.test.js` 和 `test/integration.test.js`
 - 修改状态字段或 composable 导出接口时，**必须检查** 所有 `inject('appState')` 调用点（Step1~6 + CollapsibleExportSettings 共 7 处）
+- Step3 联动模式的前提：`canLink(which)` 对 A/B 两侧均为真（即各侧多 sheet 存在公共列交集）；无公共列时 checkbox 自动禁用，切换为独立模式
 - `outputOptions.keepSheetOutput`、`extraSheetUnmatchedA/B`、`extraSheetConflicts` 这 4 个选项控制 CSV 可用性，逻辑在 `Step6Export.vue` 的 `csvDisabled` computed 中，修改时注意联动
 - `state.ui.activeSteps` 数组控制步骤激活，通过 `enableStep(n)` / `disableStep(n)` 操作，不要直接赋值
 - `CollapsibleExportSettings` 展开状态使用 `position:absolute z-20` 浮层；不可改为 in-flow，否则会撑高父行导致下方数据区被压缩
@@ -98,4 +99,4 @@ npm run test:all     # 运行全部测试（unit + integration + e2e）
 
 ---
 
-*更新于 2026-04-05，覆盖率 100%*
+*更新于 2026-04-06，覆盖率 100%*

@@ -90,5 +90,6 @@ state
 
 | 日期 | 说明 |
 |------|------|
+| 2026-04-06 | 多 sheet unlinked 模式：`selection.A/B.perSheetColSearch` 启用按 sheet 独立搜索；`onKeyColChange` 同步各 sheet 的 `keyCol` 与 `linkedKeyCol`；无公共列时 `refreshSheetData` 自动禁用联动 |
 | 2026-04-05 | 新增 Step6 导出步骤；`ui.activeTab` 改为 `ui.activeView`；新增 `ui.exportSettingsCollapsed`；新增 `resolveConflictByKey`、`resetAll` |
 | 2026-04-04 | 初版，自动扫描生成 |

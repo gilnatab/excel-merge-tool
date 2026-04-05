@@ -24,6 +24,8 @@ npm run fixtures
 | `a.xlsx` / `b.xlsx` | 标准单 sheet 测试文件（Employees 5行 / Departments 4行） |
 | `a.csv` / `b.csv` | CSV 格式等效文件 |
 | `a_multi.xlsx` / `b_multi.xlsx` | 多 sheet 文件（A: Employees+Managers / B: Locations+Offices） |
+| `a_multi_unlinked.xlsx` / `b_multi_unlinked.xlsx` | 多 sheet 文件，各 sheet 列头不同、无公共关联键，用于测试 unlinked 独立键配置模式 |
+| `b_single_unlinked.xlsx` | 单 sheet 文件（DepartmentsByEmployee），与 `a_multi_unlinked` 配对，测试 file B 只有一个 sheet 时的键持久化 |
 | `a_wide.xlsx` / `b_wide.xlsx` | 宽列文件，用于测试超过 5 列的列头展示 |
 | `a_large.xlsx` / `b_large.xlsx` | 大数据量文件（1240 行），用于测试分页/跳页功能 |
 
@@ -32,8 +34,8 @@ npm run fixtures
 | 文件 | 职责 |
 |------|------|
 | `core.test.js` | 单元测试：`buildIndex`、`resolveColumnNames`、`mergeRow`、`buildUnmatchedRow`、`classifyMerge`、`sanitizeSheetName`、`buildFinalOutput` |
-| `integration.test.js` | 集成测试：使用真实 xlsx/csv fixture 文件测试端到端解析与合并流程 |
-| `e2e/app.spec.js` | E2E 测试：Playwright 驱动浏览器完整走完 6 步向导，65 个测试用例覆盖 11 个测试套件 |
+| `integration.test.js` | 集成测试：使用真实 xlsx/csv fixture 文件测试端到端解析与合并流程；含 multi-sheet unlinked 模式的 `combineSheetData` 验证 |
+| `e2e/app.spec.js` | E2E 测试：Playwright 驱动浏览器完整走完 6 步向导，94 个测试用例覆盖 11 个测试套件 |
 
 ## E2E 测试套件索引
 
@@ -41,8 +43,8 @@ npm run fixtures
 |------|------|
 | Step 1: File Upload | 上传区显示、Next 禁用/启用、重新上传 |
 | Step 2: Sheet Selection | Sheet 检测、行数、预览、分页（大文件）、取消勾选 |
-| Step 3: Key Column | 自动选键、手动改键、宽列、联动切换 |
-| Step 4: Merge Columns | 全选/全不选/搜索、合并按钮文案 |
+| Step 3: Key Column | 自动选键、手动改键、宽列、联动切换；unlinked 模式键持久化、内联预览、下游合并验证 |
+| Step 4: Merge Columns | 全选/全不选/搜索、合并按钮文案；unlinked 多 sheet 下全选/全不选/按 sheet 独立搜索/折叠 |
 | Step 5: Merge Results | 统计卡、三视图、全屏、未匹配搜索/选择、冲突解决/批量/搜索 |
 | Step 5: Export Settings | 折叠/展开、**浮层不撑高行高**（overlay 布局回归测试） |
 | Step 6: Export | 摘要、折叠/展开、状态跨步骤持久化、**浮层不撑高行高**、Excel/CSV 下载、CSV 禁用规则、重置 |
