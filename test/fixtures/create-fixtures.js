@@ -2,6 +2,8 @@
  * Creates test fixture files:
  *   a.xlsx, b.xlsx, a.csv, b.csv  - standard single-sheet fixtures
  *   a_multi.xlsx, b_multi.xlsx    - multi-sheet fixtures for keepSheetOutput tests
+ *   a_multi_unlinked.xlsx, b_multi_unlinked.xlsx - multi-sheet fixtures requiring per-sheet key config
+ *   b_single_unlinked.xlsx - single-sheet fixture for unlinked-mode key persistence on file B
  *   a_wide.xlsx, b_wide.xlsx      - wide-column fixtures for preview regression tests
  *   a_large.xlsx, b_large.xlsx    - multi-page fixtures for fullscreen pagination tests
  *
@@ -89,6 +91,29 @@ const dataB_offices = [
   { id: '12', office: 'Remote' }, // unmatched
 ];
 
+const dataA_employees_unlinked = [
+  { employee_id: '1', employee_name: 'Alice', score: 90 },
+  { employee_id: '2', employee_name: 'Bob', score: 80 },
+];
+const dataA_managers_unlinked = [
+  { manager_id: '10', manager_name: 'Dave', dept: 'Engineering' },
+  { manager_id: '11', manager_name: 'Eve', dept: 'Marketing' },
+];
+
+const dataB_locations_unlinked = [
+  { employee_id: '1', city: 'NYC' },
+  { employee_id: '2', city: 'LA' },
+];
+const dataB_offices_unlinked = [
+  { manager_id: '10', office: 'HQ' },
+  { manager_id: '11', office: 'Branch' },
+];
+
+const dataB_single_unlinked = [
+  { employee_id: '1', city: 'NYC', dept: 'Engineering' },
+  { employee_id: '2', city: 'LA', dept: 'Marketing' },
+];
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function makeWorkbook(sheets) {
@@ -124,6 +149,27 @@ writeXlsx(
     { data: dataB_offices,   name: 'Offices'   },
   ]),
   join(__dirname, 'b_multi.xlsx')
+);
+
+writeXlsx(
+  makeWorkbook([
+    { data: dataA_employees_unlinked, name: 'EmployeesById' },
+    { data: dataA_managers_unlinked,  name: 'ManagersById'  },
+  ]),
+  join(__dirname, 'a_multi_unlinked.xlsx')
+);
+writeXlsx(
+  makeWorkbook([
+    { data: dataB_locations_unlinked, name: 'LocationsByEmployee' },
+    { data: dataB_offices_unlinked,   name: 'OfficesByManager'    },
+  ]),
+  join(__dirname, 'b_multi_unlinked.xlsx')
+);
+writeXlsx(
+  makeWorkbook([
+    { data: dataB_single_unlinked, name: 'DepartmentsByEmployee' },
+  ]),
+  join(__dirname, 'b_single_unlinked.xlsx')
 );
 
 // Wide-column regression fixtures

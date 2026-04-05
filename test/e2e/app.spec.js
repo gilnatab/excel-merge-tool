@@ -19,8 +19,11 @@
  *                `npm run fixtures` to regenerate fixture files
  */
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { tmpdir } from 'os';
+import * as XLSX from 'xlsx';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, '..', 'fixtures');
@@ -32,6 +35,9 @@ const FIX = {
   B_CSV:  join(fixturesDir, 'b.csv'),
   A_MULTI: join(fixturesDir, 'a_multi.xlsx'),
   B_MULTI: join(fixturesDir, 'b_multi.xlsx'),
+  A_MULTI_UNLINKED: join(fixturesDir, 'a_multi_unlinked.xlsx'),
+  B_MULTI_UNLINKED: join(fixturesDir, 'b_multi_unlinked.xlsx'),
+  B_SINGLE_UNLINKED: join(fixturesDir, 'b_single_unlinked.xlsx'),
   A_WIDE: join(fixturesDir, 'a_wide.xlsx'),
   B_WIDE: join(fixturesDir, 'b_wide.xlsx'),
   A_LARGE: join(fixturesDir, 'a_large.xlsx'),
@@ -82,6 +88,52 @@ async function runMergeFlow(page) {
 /** Run full merge flow and advance to Step 6. */
 async function runMergeFlowToStep6(page) {
   await runMergeFlow(page);
+  await page.getByTestId('btn-next').click();
+}
+
+async function saveDownloadToTemp(download, ext) {
+  const tempPath = join(
+    tmpdir(),
+    `excel-merge-tool-${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`
+  );
+  await download.saveAs(tempPath);
+  return tempPath;
+}
+
+async function readDownloadedWorkbook(download) {
+  const filePath = await saveDownloadToTemp(download, 'xlsx');
+  return XLSX.read(readFileSync(filePath), { type: 'buffer' });
+}
+
+async function readDownloadedCsv(download) {
+  const filePath = await saveDownloadToTemp(download, 'csv');
+  return readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
+}
+
+async function configureUnlinkedKeysAndAdvanceToStep4(page, fileA = FIX.A_MULTI_UNLINKED, fileB = FIX.B_MULTI_UNLINKED) {
+  await page.goto('/');
+  await uploadFile(page, 'A', fileA);
+  await waitForUploadDone(page, 'A');
+  await uploadFile(page, 'B', fileB);
+  await waitForUploadDone(page, 'B');
+  await page.getByTestId('btn-next').click();
+  await page.getByTestId('btn-next').click();
+
+  await page.locator('aside').getByText('EmployeesById').click();
+  await page.locator('section select').selectOption('employee_id');
+
+  await page.locator('aside').getByText('ManagersById').click();
+  await page.locator('section select').selectOption('manager_id');
+
+  const bSideName = fileB === FIX.B_SINGLE_UNLINKED ? 'DepartmentsByEmployee' : 'LocationsByEmployee';
+  await page.locator('aside').getByText(bSideName).click();
+  await page.locator('section select').selectOption('employee_id');
+
+  if (fileB !== FIX.B_SINGLE_UNLINKED) {
+    await page.locator('aside').getByText('OfficesByManager').click();
+    await page.locator('section select').selectOption('manager_id');
+  }
+
   await page.getByTestId('btn-next').click();
 }
 
@@ -159,8 +211,14 @@ test.describe('Step 2: Sheet Selection', () => {
 
   test('shows correct data row counts', async ({ page }) => {
     // a.xlsx Employees: 5 rows; b.xlsx Departments: 4 rows
-    await expect(page.locator('text=5 行')).toBeVisible();
-    await expect(page.locator('text=4 行')).toBeVisible();
+    await expect(page.getByTestId('step2-sheet-card-a-0')).toContainText('5 行');
+    await expect(page.getByTestId('step2-sheet-card-b-0')).toContainText('4 行');
+  });
+
+  test('first checked sheet is previewed by default', async ({ page }) => {
+    await expect(page.getByTestId('step2-sheet-card-a-0')).toContainText('Employees');
+    await expect(page.locator('section').filter({ hasText: 'Employees' }).locator('th').filter({ hasText: 'id' }).first()).toBeVisible();
+    await expect(page.locator('section').filter({ hasText: 'Departments' }).locator('th').filter({ hasText: 'id' }).first()).toBeVisible();
   });
 
   test('preview panel renders data when clicking a sheet card', async ({ page }) => {
@@ -191,6 +249,19 @@ test.describe('Step 2: Sheet Selection', () => {
     await page.getByTestId('btn-jump-page').click();
     await expect(page.getByTestId('text-pagination-summary')).toContainText(/51.*75.*1,240/);
     await expect(page.locator('td').filter({ hasText: 'Employee 51' })).toBeVisible();
+  });
+
+  test('changing start row reparses preview and updates step 3 key selection', async ({ page }) => {
+    await page.getByTestId('step2-sheet-card-a-0').click();
+    await expect(page.locator('th').filter({ hasText: 'id' }).first()).toBeVisible();
+
+    await page.getByTestId('step2-sheet-card-a-0').locator('input[type="number"]').fill('2');
+    await page.getByTestId('step2-sheet-card-a-0').locator('input[type="number"]').press('Enter');
+
+    await expect(page.locator('th').filter({ hasText: '1' }).first()).toBeVisible();
+    await page.getByTestId('btn-next').click();
+
+    await expect(page.locator('select').first()).toHaveValue('1');
   });
 
   test('unchecking a sheet disables step 3+ until re-checked', async ({ page }) => {
@@ -227,6 +298,12 @@ test.describe('Step 3: Key Column', () => {
     await expect(selectA).toHaveValue('name');
   });
 
+  test('can change key column for file B in linked mode', async ({ page }) => {
+    const selectB = page.locator('select').last();
+    await selectB.selectOption('city');
+    await expect(selectB).toHaveValue('city');
+  });
+
   test('preview panel shows columns beyond the fifth header', async ({ page }) => {
     await page.goto('/');
     await uploadFile(page, 'A', FIX.A_WIDE);
@@ -247,7 +324,205 @@ test.describe('Step 3: Key Column', () => {
     // Uncheck to enter per-sheet mode
     await syncCheckbox.uncheck();
     // Per-sheet mode shows sidebar with sheet names
-    await expect(page.locator('text=文件 A')).toBeVisible();
+    await expect(page.locator('aside').getByText('文件 A', { exact: true })).toBeVisible();
+  });
+
+  test('linked multi-sheet mode only offers headers shared by all checked sheets', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A_MULTI);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B_MULTI);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    const selectA = page.locator('select').first();
+    const selectB = page.locator('select').last();
+    await expect(selectA).toHaveValue('id');
+    await expect(selectA.locator('option[value="id"]')).toHaveCount(1);
+    await expect(selectA.locator('option[value="name"]')).toHaveCount(1);
+    await expect(selectA.locator('option[value="score"]')).toHaveCount(0);
+    await expect(selectA.locator('option[value="dept"]')).toHaveCount(0);
+
+    await expect(selectB).toHaveValue('id');
+    await expect(selectB.locator('option')).toHaveCount(2);
+    await expect(selectB.locator('option[value="id"]')).toHaveCount(1);
+    await expect(selectB.locator('option[value="city"]')).toHaveCount(0);
+    await expect(selectB.locator('option[value="office"]')).toHaveCount(0);
+  });
+
+  test('linked mode uses file B key selection when file A has multiple sheets', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A_MULTI);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    const selectA = page.locator('select').first();
+    const selectB = page.locator('select').last();
+    await expect(selectA).toHaveValue('id');
+
+    await selectB.selectOption('city');
+    await expect(selectB).toHaveValue('city');
+
+    await page.getByTestId('btn-next').click();
+
+    const selectAllBtns = page.getByRole('button', { name: '全选' });
+    await selectAllBtns.first().click();
+    await selectAllBtns.last().click();
+    await page.getByTestId('btn-next').click();
+
+    await expect(page.getByTestId('tab-matched')).toContainText('0', { timeout: 10_000 });
+  });
+
+  test('linked mode uses file A key selection when file B has multiple sheets', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B_MULTI);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    const selectA = page.locator('select').first();
+    const selectB = page.locator('select').last();
+    await expect(selectB).toHaveValue('id');
+
+    await selectA.selectOption('name');
+    await expect(selectA).toHaveValue('name');
+
+    await page.getByTestId('btn-next').click();
+
+    const selectAllBtns = page.getByRole('button', { name: '全选' });
+    await selectAllBtns.first().click();
+    await selectAllBtns.last().click();
+    await page.getByTestId('btn-next').click();
+
+    await expect(page.getByTestId('tab-matched')).toContainText('0', { timeout: 10_000 });
+  });
+
+  test('multi-sheet files without a common key fall back to per-sheet configuration', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A_MULTI_UNLINKED);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B_MULTI_UNLINKED);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    const syncCheckbox = page.locator('input[type="checkbox"]').first();
+    await expect(syncCheckbox).not.toBeChecked();
+    await expect(page.locator('text=当前工作表没有公共关联键，已切换为分别配置')).toBeVisible();
+    await expect(page.locator('text=文件 A - EmployeesById')).toBeVisible();
+
+    await page.locator('aside').getByText('EmployeesById').click();
+    await page.locator('section select').selectOption('employee_id');
+
+    await page.locator('aside').getByText('ManagersById').click();
+    await page.locator('section select').selectOption('manager_id');
+
+    await page.locator('aside').getByText('LocationsByEmployee').click();
+    await page.locator('section select').selectOption('employee_id');
+
+    await page.locator('aside').getByText('OfficesByManager').click();
+    await page.locator('section select').selectOption('manager_id');
+
+    await page.getByTestId('btn-next').click();
+    await expect(page.locator('text=employee_id')).toHaveCount(2);
+    await expect(page.locator('text=manager_id')).toHaveCount(2);
+  });
+
+  test('unlinked mode persists key selection changes for file B sheets', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A_MULTI_UNLINKED);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B_MULTI_UNLINKED);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    await page.locator('aside').getByText('LocationsByEmployee').click();
+    await page.locator('section select').selectOption('city');
+    await expect(page.locator('section select')).toHaveValue('city');
+
+    await page.locator('aside').getByText('OfficesByManager').click();
+    await page.locator('section select').selectOption('office');
+    await expect(page.locator('section select')).toHaveValue('office');
+
+    await page.locator('aside').getByText('LocationsByEmployee').click();
+    await expect(page.locator('section select')).toHaveValue('city');
+
+    await page.locator('aside').getByText('OfficesByManager').click();
+    await expect(page.locator('section select')).toHaveValue('office');
+  });
+
+  test('unlinked mode shows inline preview for the active sheet', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A_MULTI_UNLINKED);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B_MULTI_UNLINKED);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    await page.locator('aside').getByText('LocationsByEmployee').click();
+
+    await expect(page.locator('section')).toContainText('数据预览');
+    await expect(page.locator('section th').filter({ hasText: 'employee_id' }).first()).toBeVisible();
+    await expect(page.locator('section th').filter({ hasText: 'city' }).first()).toBeVisible();
+    await expect(page.locator('section td').filter({ hasText: 'NYC' }).first()).toBeVisible();
+  });
+
+  test('unlinked mode uses file B key selection in downstream merge', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A_MULTI_UNLINKED);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B_MULTI_UNLINKED);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    await page.locator('aside').getByText('LocationsByEmployee').click();
+    await page.locator('section select').selectOption('city');
+    await page.locator('aside').getByText('OfficesByManager').click();
+    await page.locator('section select').selectOption('office');
+
+    await page.getByTestId('btn-next').click();
+
+    const selectAllBtns = page.getByRole('button', { name: '全选' });
+    await selectAllBtns.first().click();
+    await selectAllBtns.last().click();
+    await page.getByTestId('btn-next').click();
+
+    await expect(page.getByTestId('tab-matched')).toContainText('0', { timeout: 10_000 });
+  });
+
+  test('unlinked mode uses file B key selection when file B has only one sheet', async ({ page }) => {
+    await page.goto('/');
+    await uploadFile(page, 'A', FIX.A_MULTI_UNLINKED);
+    await waitForUploadDone(page, 'A');
+    await uploadFile(page, 'B', FIX.B_SINGLE_UNLINKED);
+    await waitForUploadDone(page, 'B');
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    const syncCheckbox = page.locator('input[type="checkbox"]').first();
+    await expect(syncCheckbox).not.toBeChecked();
+
+    await page.locator('aside').getByText('DepartmentsByEmployee').click();
+    await page.locator('section select').selectOption('city');
+    await expect(page.locator('section select')).toHaveValue('city');
+
+    await page.getByTestId('btn-next').click();
+
+    const selectAllBtns = page.getByRole('button', { name: '全选' });
+    await selectAllBtns.first().click();
+    await selectAllBtns.last().click();
+    await page.getByTestId('btn-next').click();
+
+    await expect(page.getByTestId('tab-matched')).toContainText('0', { timeout: 10_000 });
   });
 });
 
@@ -299,6 +574,71 @@ test.describe('Step 4: Merge Columns', () => {
 
   test('merge button label is 开始合并 on step 4', async ({ page }) => {
     await expect(page.getByTestId('btn-next')).toContainText('开始合并');
+  });
+
+  test('unlinked multi-sheet mode starts with per-sheet counters', async ({ page }) => {
+    await configureUnlinkedKeysAndAdvanceToStep4(page);
+
+    await expect(page.locator('text=/已选 0 \\/ 4/').first()).toBeVisible();
+    await expect(page.locator('text=/已选 0 \\/ 2/').first()).toBeVisible();
+  });
+
+  test('unlinked multi-sheet mode 全选 selects columns across all sheets', async ({ page }) => {
+    await configureUnlinkedKeysAndAdvanceToStep4(page);
+
+    const selectAllBtns = page.getByRole('button', { name: '全选' });
+    await selectAllBtns.first().click();
+    await selectAllBtns.last().click();
+
+    await expect(page.locator('text=/已选 4 \\/ 4/').first()).toBeVisible();
+    await expect(page.locator('text=/已选 2 \\/ 2/').first()).toBeVisible();
+  });
+
+  test('unlinked multi-sheet mode 全不选 clears columns across all sheets', async ({ page }) => {
+    await configureUnlinkedKeysAndAdvanceToStep4(page);
+
+    const selectAllBtns = page.getByRole('button', { name: '全选' });
+    await selectAllBtns.first().click();
+    await selectAllBtns.last().click();
+
+    const clearBtns = page.getByRole('button', { name: '全不选' });
+    await clearBtns.first().click();
+    await clearBtns.last().click();
+
+    await expect(page.locator('text=/已选 0 \\/ 4/').first()).toBeVisible();
+    await expect(page.locator('text=/已选 0 \\/ 2/').first()).toBeVisible();
+  });
+
+  test('unlinked multi-sheet mode column search filters per-sheet column lists', async ({ page }) => {
+    await configureUnlinkedKeysAndAdvanceToStep4(page);
+
+    const searchInputs = page.locator('input[placeholder="搜索列名..."]');
+    await searchInputs.first().fill('score');
+
+    const employeePanel = page.getByTestId('step4-sheet-panel-a-0');
+    const managerPanel = page.getByTestId('step4-sheet-panel-a-1');
+
+    await expect(employeePanel).toContainText('score');
+    await expect(employeePanel).not.toContainText('employee_name');
+    await expect(managerPanel).not.toContainText('manager_name');
+    await expect(managerPanel).not.toContainText('dept');
+  });
+
+  test('unlinked multi-sheet mode can collapse a finished sheet without losing selected columns', async ({ page }) => {
+    await configureUnlinkedKeysAndAdvanceToStep4(page);
+
+    const sheetPanel = page.getByTestId('step4-sheet-panel-a-0');
+    await sheetPanel.getByLabel('employee_name').check();
+    await expect(sheetPanel).toContainText('已选 1 / 2');
+
+    await page.getByTestId('btn-step4-toggle-sheet-a-0').click();
+    await expect(sheetPanel).toContainText('展开');
+    await expect(sheetPanel).not.toContainText('employee_name');
+    await expect(sheetPanel).toContainText('已选 1 / 2');
+
+    await page.getByTestId('btn-step4-toggle-sheet-a-0').click();
+    await expect(sheetPanel).toContainText('收起');
+    await expect(sheetPanel.getByLabel('employee_name')).toBeChecked();
   });
 });
 
@@ -359,6 +699,16 @@ test.describe('Step 5: Merge Results', () => {
 
     await page.getByTestId('btn-step5-expand-export-settings').click();
     await expect(page.getByTestId('step5-export-settings-panel')).toBeVisible();
+  });
+
+  test('export settings auto-collapses on outside click from initial expanded state', async ({ page }) => {
+    await expect(page.getByTestId('step5-export-settings-panel')).toBeVisible();
+
+    await page.getByTestId('tab-unmatched').click();
+
+    await expect(page.getByTestId('step5-export-settings-panel')).toHaveCount(0);
+    await expect(page.getByTestId('step5-export-settings-collapsed')).toBeVisible();
+    await expect(page.locator('text=无未匹配数据')).not.toBeVisible();
   });
 
   test('export settings panel is absolute overlay: row height does not grow when expanded', async ({ page }) => {
@@ -495,6 +845,9 @@ test.describe('Step 6: Export', () => {
   });
 
   test('export settings can collapse and expand on step 6', async ({ page }) => {
+    if (await page.getByTestId('step6-export-settings-panel').count() === 0) {
+      await page.getByTestId('btn-step6-expand-export-settings').click();
+    }
     await expect(page.getByTestId('step6-export-settings-panel')).toBeVisible();
 
     await page.getByTestId('btn-step6-collapse-export-settings').click();
@@ -503,6 +856,18 @@ test.describe('Step 6: Export', () => {
 
     await page.getByTestId('btn-step6-expand-export-settings').click();
     await expect(page.getByTestId('step6-export-settings-panel')).toBeVisible();
+  });
+
+  test('export settings auto-collapses on outside click from initial expanded state on step 6', async ({ page }) => {
+    if (await page.getByTestId('step6-export-settings-panel').count() === 0) {
+      await page.getByTestId('btn-step6-expand-export-settings').click();
+    }
+    await expect(page.getByTestId('step6-export-settings-panel')).toBeVisible();
+
+    await page.locator('text=已匹配行').click();
+
+    await expect(page.getByTestId('step6-export-settings-panel')).toHaveCount(0);
+    await expect(page.getByTestId('step6-export-settings-collapsed')).toBeVisible();
   });
 
   test('export settings panel is absolute overlay: row height does not grow when expanded on step 6', async ({ page }) => {
@@ -545,11 +910,50 @@ test.describe('Step 6: Export', () => {
     expect(dl.suggestedFilename()).toMatch(/\.xlsx$/);
   });
 
+  test('Excel download includes requested extra sheets with expected row counts', async ({ page }) => {
+    await page.locator('label').filter({ hasText: '保存未匹配 A' }).locator('input[type="checkbox"]').first().check();
+    await page.locator('label').filter({ hasText: '保存未匹配 B' }).locator('input[type="checkbox"]').first().check();
+    await page.locator('label').filter({ hasText: '保存冲突数据' }).locator('input[type="checkbox"]').first().check();
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
+    await page.getByTestId('btn-download-excel').click();
+    const dl = await downloadPromise;
+    const wb = await readDownloadedWorkbook(dl);
+
+    expect(wb.SheetNames).toEqual(expect.arrayContaining(['合并结果', '未匹配_A', '未匹配_B', '冲突数据']));
+
+    const mergedRows = XLSX.utils.sheet_to_json(wb.Sheets['合并结果']);
+    const unmatchedARows = XLSX.utils.sheet_to_json(wb.Sheets['未匹配_A']);
+    const unmatchedBRows = XLSX.utils.sheet_to_json(wb.Sheets['未匹配_B']);
+    const conflictRows = XLSX.utils.sheet_to_json(wb.Sheets['冲突数据']);
+
+    expect(mergedRows).toHaveLength(3);
+    expect(unmatchedARows).toHaveLength(1);
+    expect(unmatchedBRows).toHaveLength(1);
+    expect(conflictRows).toHaveLength(3);
+  });
+
   test('CSV download triggers .csv file save (default state)', async ({ page }) => {
     const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
     await page.getByTestId('btn-download-csv').click();
     const dl = await downloadPromise;
     expect(dl.suggestedFilename()).toMatch(/\.csv$/);
+  });
+
+  test('CSV download contains merged data rows', async ({ page }) => {
+    const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
+    await page.getByTestId('btn-download-csv').click();
+    const dl = await downloadPromise;
+    const csv = await readDownloadedCsv(dl);
+    const lines = csv.trim().split(/\r?\n/);
+
+    expect(lines[0]).toContain('id');
+    expect(lines[0]).toContain('name');
+    expect(lines[0]).toContain('city');
+    expect(lines).toHaveLength(4);
+    expect(csv).toContain('Alice');
+    expect(csv).toContain('Bob');
+    expect(csv).toContain('Dup1');
   });
 
   test('CSV button disabled when 按工作表分页输出 checked', async ({ page }) => {
@@ -702,6 +1106,34 @@ test.describe('Multi-sheet file flow', () => {
     await expect(page.getByTestId('btn-download-csv')).toBeDisabled({ timeout: 5_000 });
     // Excel should still work
     await expect(page.getByTestId('btn-download-excel')).toBeEnabled();
+  });
+
+  test('multi-sheet Excel export splits merged rows by source sheet', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('upload-zone-a').locator('input[type="file"]').setInputFiles(FIX.A_MULTI);
+    await waitForUploadDone(page, 'A');
+    await page.getByTestId('upload-zone-b').locator('input[type="file"]').setInputFiles(FIX.B_MULTI);
+    await waitForUploadDone(page, 'B');
+
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    const selectAllBtns = page.getByRole('button', { name: '全选' });
+    await selectAllBtns.first().click();
+    await selectAllBtns.last().click();
+    await page.getByTestId('btn-next').click();
+    await page.getByTestId('btn-next').click();
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
+    await page.getByTestId('btn-download-excel').click();
+    const dl = await downloadPromise;
+    const wb = await readDownloadedWorkbook(dl);
+
+    expect(wb.SheetNames).toEqual(expect.arrayContaining(['Employees', 'Managers']));
+    expect(wb.SheetNames).not.toContain('合并结果');
+    expect(XLSX.utils.sheet_to_json(wb.Sheets['Employees'])).toHaveLength(2);
+    expect(XLSX.utils.sheet_to_json(wb.Sheets['Managers'])).toHaveLength(2);
   });
 });
 

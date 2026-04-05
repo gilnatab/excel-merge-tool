@@ -2,9 +2,12 @@
   <div class="max-w-5xl mx-auto w-full flex-1 min-h-0 flex flex-col">
     <div class="flex items-center gap-3 mb-6 px-1 shrink-0">
       <label class="flex items-center gap-2 cursor-pointer select-none">
-        <input type="checkbox" :checked="bothLinked" @change="toggleBothLinked" />
+        <input type="checkbox" :checked="bothLinked" :disabled="!canUseLinkedMode" @change="toggleBothLinked" />
         <span class="text-sm font-medium text-on-surface">同步所有工作表（使用相同关联键）</span>
       </label>
+      <span v-if="!canUseLinkedMode" class="text-xs text-on-surface-variant">
+        当前工作表没有公共关联键，已切换为分别配置
+      </span>
     </div>
 
     <div v-if="bothLinked" class="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
@@ -24,7 +27,10 @@
           <p class="text-on-surface-variant text-sm">请先勾选工作表</p>
         </template>
         <template v-else>
-          <select v-model="state.selection[which].linkedKeyCol" class="w-full shrink-0" @change="onKeyChange">
+          <select
+            v-model="state.selection[which].linkedKeyCol"
+            class="w-full shrink-0"
+            @change="onKeyChange(which, $event.target.value)">
             <option value="" disabled>请选择关联列</option>
             <option v-for="h in headerOptions(which)" :key="h" :value="h">{{ h }}</option>
           </select>
@@ -64,7 +70,7 @@
         </template>
       </aside>
 
-      <section class="flex-1 min-w-0 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 overflow-y-auto">
+      <section class="flex-1 min-w-0 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 flex flex-col min-h-0">
         <div v-if="!activeSheet" class="flex items-center justify-center h-40 text-on-surface-variant/50">
           <div class="text-center">
             <AppIcon name="link" class="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -72,27 +78,40 @@
           </div>
         </div>
         <template v-else>
-          <div class="flex items-center gap-2 mb-5">
+          <div class="flex items-center gap-2 mb-5 shrink-0">
             <AppIcon name="link" class="w-5 h-5 text-primary" />
             <span class="font-semibold text-on-surface">
               文件 {{ activeSheet.which }} - {{ activeConfig?.name }}
             </span>
-            <button v-if="activeConfig?.data?.length"
-                    @click="showIndependentFullscreen = true"
-                    class="ml-auto p-1.5 rounded-lg hover:bg-surface-container-low text-on-surface-variant">
-              <AppIcon name="open_in_full" class="w-4 h-4" />
-            </button>
           </div>
           <label class="block text-sm text-on-surface-variant mb-2">关联键列</label>
-          <select v-model="activeConfig.keyCol" class="w-full mb-5" @change="onKeyChange">
+          <select
+            v-model="activeConfig.keyCol"
+            class="w-full mb-5"
+            @change="onKeyChange(null, $event.target.value)">
             <option value="" disabled>请选择关联列</option>
             <option v-for="h in activeConfig.headers" :key="h" :value="h">{{ h }}</option>
           </select>
-          <div class="flex items-start gap-2 bg-surface-container-low rounded-xl p-3">
+          <div class="flex items-start gap-2 bg-surface-container-low rounded-xl p-3 shrink-0">
             <AppIcon name="info" class="w-4 h-4 text-primary shrink-0 mt-0.5" />
             <p class="text-xs text-on-surface-variant leading-relaxed">
               关联键是用于匹配两个文件中相同记录的列。选择包含唯一标识符的列，例如 ID 或编号。
             </p>
+          </div>
+          <div v-if="activeConfig?.data?.length" class="mt-5 flex-1 min-h-0 flex flex-col">
+            <div class="mb-3 flex items-center justify-between shrink-0">
+              <p class="text-xs text-on-surface-variant">数据预览</p>
+              <button
+                @click="showIndependentFullscreen = true"
+                class="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary transition-colors">
+                <AppIcon name="open_in_full" class="w-4 h-4" />
+                查看全部
+              </button>
+            </div>
+            <InlinePreviewTable
+              :rows="activeConfig.data"
+              :cols="activeConfig.headers"
+              empty-text="暂无数据" />
           </div>
         </template>
       </section>
@@ -120,7 +139,7 @@
 </template>
 
 <script setup>
-import { computed, inject, ref } from 'vue';
+import { computed, inject, ref, watchEffect } from 'vue';
 import AppIcon from './AppIcon.vue';
 import DataTable from './DataTable.vue';
 import InlinePreviewTable from './InlinePreviewTable.vue';
@@ -134,6 +153,10 @@ const showIndependentFullscreen = ref(false);
 
 const bothLinked = computed(() =>
   state.selection.A.keyLinked && state.selection.B.keyLinked
+);
+
+const canUseLinkedMode = computed(() =>
+  canLink('A') && canLink('B')
 );
 
 function toggleBothLinked() {
@@ -150,8 +173,17 @@ function checkedConfigs(which) {
 }
 
 function headerOptions(which) {
-  const first = checkedConfigs(which)[0];
-  return first ? first.cfg.headers : [];
+  const items = checkedConfigs(which);
+  if (items.length === 0) return [];
+  return items.slice(1).reduce(
+    (common, item) => common.filter(header => item.cfg.headers.includes(header)),
+    [...items[0].cfg.headers]
+  );
+}
+
+function canLink(which) {
+  const items = checkedConfigs(which);
+  return items.length <= 1 || headerOptions(which).length > 0;
 }
 
 function previewData(which) {
@@ -175,7 +207,43 @@ const activeConfig = computed(() => {
   return configs[idx] ?? null;
 });
 
-function onKeyChange() {
+function onKeyChange(which = null, value = '') {
+  if (which) {
+    const first = checkedConfigs(which)[0];
+    if (first) {
+      const nextKey = value || state.selection[which].linkedKeyCol;
+      first.cfg.keyCol = nextKey;
+      state.selection[which].linkedKeyCol = nextKey;
+    }
+  } else if (activeSheet.value) {
+    const activeWhich = activeSheet.value.which;
+    if (activeConfig.value) {
+      activeConfig.value.keyCol = value || activeConfig.value.keyCol;
+    }
+    if (checkedConfigs(activeWhich).length === 1 && activeConfig.value) {
+      state.selection[activeWhich].linkedKeyCol = activeConfig.value.keyCol;
+    }
+  }
   onKeyColChange();
 }
+
+watchEffect(() => {
+  if (bothLinked.value) {
+    activeSheet.value = null;
+    return;
+  }
+
+  const currentExists = activeSheet.value && checkedConfigs(activeSheet.value.which)
+    .some(item => item.idx === activeSheet.value.idx);
+
+  if (currentExists) return;
+
+  const firstA = checkedConfigs('A')[0];
+  const firstB = checkedConfigs('B')[0];
+  activeSheet.value = firstA
+    ? { which: 'A', idx: firstA.idx }
+    : firstB
+      ? { which: 'B', idx: firstB.idx }
+      : null;
+});
 </script>

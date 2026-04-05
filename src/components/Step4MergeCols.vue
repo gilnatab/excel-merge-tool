@@ -40,8 +40,7 @@
             <!-- Other columns -->
             <template v-for="h in checkedConfigs(which)[0].cfg.headers" :key="h">
               <label
-                v-if="h !== linkedKeyCol(which)"
-                v-show="!state.selection[which].colSearch || h.toLowerCase().includes(state.selection[which].colSearch.toLowerCase())"
+                v-if="h !== linkedKeyCol(which) && matchesSheetSearch(which, h)"
                 class="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-container-low cursor-pointer text-sm transition-colors">
                 <input type="checkbox"
                        :checked="isLinkedColSelected(which, h)"
@@ -52,23 +51,49 @@
           </template>
           <template v-else>
             <!-- Per-sheet independent -->
-            <div v-for="item in checkedConfigs(which)" :key="item.idx" class="mb-4">
-              <div class="text-xs font-semibold text-primary mb-1 px-3">{{ item.cfg.name }}</div>
-              <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-fixed/50 mb-1">
-                <AppIcon name="lock" class="w-4 h-4 text-primary shrink-0" />
-                <span class="text-sm text-on-surface font-medium flex-1">{{ item.cfg.keyCol }}</span>
-                <span class="text-xs text-primary font-semibold">关联键</span>
+            <div
+              v-for="item in checkedConfigs(which)"
+              :key="item.idx"
+              :data-testid="`step4-sheet-panel-${which.toLowerCase()}-${item.idx}`"
+              :class="[
+                'mb-4 rounded-xl border transition-colors',
+                isSheetCollapsed(which, item.idx)
+                  ? 'border-outline-variant/30 bg-surface-container-low/60'
+                  : 'border-outline-variant/20 bg-transparent'
+              ]">
+              <div class="flex items-center gap-2 px-3 py-2.5">
+                <div class="min-w-0 flex-1">
+                  <div class="text-xs font-semibold text-primary truncate">{{ item.cfg.name }}</div>
+                  <div class="text-[11px] text-on-surface-variant mt-0.5">
+                    已选 {{ selectedColsForSheet(item.cfg) }} / {{ totalColsForSheet(item.cfg) }}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  :data-testid="`btn-step4-toggle-sheet-${which.toLowerCase()}-${item.idx}`"
+                  @click="toggleSheetCollapsed(which, item.idx)"
+                  class="flex items-center gap-1.5 rounded-lg border border-outline-variant/30 bg-surface-container-low px-2.5 py-1.5 text-xs text-on-surface-variant transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary">
+                  <span>{{ isSheetCollapsed(which, item.idx) ? '展开' : '收起' }}</span>
+                  <AppIcon :name="isSheetCollapsed(which, item.idx) ? 'chevron_right' : 'expand_more'" class="w-4 h-4" />
+                </button>
               </div>
-              <template v-for="h in item.cfg.headers" :key="h">
-                <label
-                  v-if="h !== item.cfg.keyCol"
-                  v-show="!state.selection[which].perSheetColSearch[item.idx] || h.toLowerCase().includes((state.selection[which].perSheetColSearch[item.idx] || '').toLowerCase())"
-                  class="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-container-low cursor-pointer text-sm transition-colors">
-                  <input type="checkbox"
-                         :checked="isPerSheetColSelected(item.cfg, h)"
-                         @change="onPerSheetColChange(item.cfg, h, $event.target.checked)" />
-                  <span class="text-on-surface">{{ h }}</span>
-                </label>
+              <template v-if="!isSheetCollapsed(which, item.idx)">
+                <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-fixed/50 mb-1 mx-2">
+                  <AppIcon name="lock" class="w-4 h-4 text-primary shrink-0" />
+                  <span class="text-sm text-on-surface font-medium flex-1">{{ item.cfg.keyCol }}</span>
+                  <span class="text-xs text-primary font-semibold">关联键</span>
+                </div>
+                <template v-for="h in item.cfg.headers" :key="h">
+                  <label
+                    v-if="h !== item.cfg.keyCol && matchesSheetSearch(which, h)"
+                    class="mx-2 flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-container-low cursor-pointer text-sm transition-colors">
+                    <input type="checkbox"
+                           :checked="isPerSheetColSelected(item.cfg, h)"
+                           @change="onPerSheetColChange(item.cfg, h, $event.target.checked)" />
+                    <span class="text-on-surface">{{ h }}</span>
+                  </label>
+                </template>
+                <div class="h-2"></div>
               </template>
             </div>
           </template>
@@ -79,10 +104,11 @@
 </template>
 
 <script setup>
-import { inject } from 'vue';
+import { inject, ref } from 'vue';
 import AppIcon from './AppIcon.vue';
 
 const { state, toggleColsLinked } = inject('appState');
+const collapsedSheets = ref({ A: {}, B: {} });
 
 function checkedConfigs(which) {
   const configs = which === 'A' ? state.sheetConfigsA : state.sheetConfigsB;
@@ -126,6 +152,19 @@ function getSelectedCount(which) {
   ), 0);
 }
 
+function totalColsForSheet(cfg) {
+  return cfg.headers.filter(h => h !== cfg.keyCol).length;
+}
+
+function selectedColsForSheet(cfg) {
+  return (cfg.selectedCols || []).filter(h => h !== cfg.keyCol).length;
+}
+
+function matchesSheetSearch(which, header) {
+  const search = (state.selection[which].colSearch || '').trim().toLowerCase();
+  return !search || header.toLowerCase().includes(search);
+}
+
 function isLinkedColSelected(which, h) {
   const sel = state.selection[which];
   if (h === linkedKeyCol(which)) return true;
@@ -143,14 +182,25 @@ function onLinkedColChange(which, h, checked) {
 
 function selectAll(which, checked) {
   const sel = state.selection[which];
-  const first = checkedConfigs(which)[0];
+  const items = checkedConfigs(which);
+  const first = items[0];
   if (!first) return;
-  const keyCol = linkedKeyCol(which);
-  if (checked) {
-    sel.linkedSelectedCols = first.cfg.headers.filter(h => h !== keyCol);
-  } else {
-    sel.linkedSelectedCols = [];
+
+  if (state.selection[which].colsLinked || items.length === 1) {
+    const keyCol = linkedKeyCol(which);
+    if (checked) {
+      sel.linkedSelectedCols = first.cfg.headers.filter(h => h !== keyCol);
+    } else {
+      sel.linkedSelectedCols = [];
+    }
+    return;
   }
+
+  items.forEach(({ cfg }) => {
+    cfg.selectedCols = checked
+      ? cfg.headers.filter(h => h !== cfg.keyCol)
+      : [];
+  });
 }
 
 function isPerSheetColSelected(cfg, h) {
@@ -165,6 +215,14 @@ function onPerSheetColChange(cfg, h, checked) {
   } else {
     cfg.selectedCols = cfg.selectedCols.filter(c => c !== h);
   }
+}
+
+function isSheetCollapsed(which, idx) {
+  return !!collapsedSheets.value[which]?.[idx];
+}
+
+function toggleSheetCollapsed(which, idx) {
+  collapsedSheets.value[which][idx] = !collapsedSheets.value[which][idx];
 }
 
 function toggleLinked(which) {

@@ -47,6 +47,7 @@
         <div class="shrink-0 py-3 flex flex-wrap items-center justify-between gap-3 text-sm text-on-surface-variant border-t border-outline-variant/20">
           <div class="flex flex-wrap items-center gap-3">
             <span data-testid="text-pagination-summary">{{ rangeSummaryText }}</span>
+            <span class="hidden sm:block w-px h-6 bg-outline-variant/30"></span>
             <label class="flex items-center gap-2">
               <span>每页</span>
               <select v-model.number="currentPageSize"
@@ -78,16 +79,18 @@
                 跳转
               </button>
             </div>
-
-            <button @click="goToPreviousPage" :disabled="page <= 1"
-                    class="px-3 py-1 border border-outline-variant rounded-lg hover:bg-surface-container-low disabled:opacity-40">
-              上一页
-            </button>
-            <span>第 {{ formatNumber(page) }} / {{ formatNumber(totalPages) }} 页</span>
-            <button @click="goToNextPage" :disabled="page >= totalPages"
-                    class="px-3 py-1 border border-outline-variant rounded-lg hover:bg-surface-container-low disabled:opacity-40">
-              下一页
-            </button>
+            <span class="hidden sm:block w-px h-6 bg-outline-variant/30"></span>
+            <div class="flex flex-wrap items-center gap-3">
+              <button @click="goToPreviousPage" :disabled="page <= 1"
+                      class="px-3 py-1 border border-outline-variant rounded-lg hover:bg-surface-container-low disabled:opacity-40">
+                上一页
+              </button>
+              <span>第 {{ formatNumber(page) }} / {{ formatNumber(totalPages) }} 页</span>
+              <button @click="goToNextPage" :disabled="page >= totalPages"
+                      class="px-3 py-1 border border-outline-variant rounded-lg hover:bg-surface-container-low disabled:opacity-40">
+                下一页
+              </button>
+            </div>
           </div>
         </div>
       </div>

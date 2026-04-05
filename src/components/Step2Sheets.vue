@@ -126,7 +126,7 @@
 </template>
 
 <script setup>
-import { inject, ref } from 'vue';
+import { inject, ref, watchEffect } from 'vue';
 import AppIcon from './AppIcon.vue';
 import DataTable from './DataTable.vue';
 import InlinePreviewTable from './InlinePreviewTable.vue';
@@ -174,4 +174,16 @@ function onCheckChange(which, idx, checked) {
 function onStartRowChange(which, idx, value) {
   onSheetStartRowChange(which, idx, value);
 }
+
+watchEffect(() => {
+  for (const which of ['A', 'B']) {
+    const availableConfigs = configs(which);
+    const currentIdx = selectedPreviewSheet.value[which];
+    const currentCfg = currentIdx === null ? null : availableConfigs[currentIdx];
+    if (currentCfg?.checked) continue;
+
+    const firstCheckedIdx = availableConfigs.findIndex(cfg => cfg.checked);
+    selectedPreviewSheet.value[which] = firstCheckedIdx >= 0 ? firstCheckedIdx : null;
+  }
+});
 </script>

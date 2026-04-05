@@ -35,6 +35,22 @@ function makeSelection() {
   };
 }
 
+function getCheckedSheetConfigs(configs) {
+  return configs.filter(cfg => cfg.checked && cfg.headers.length > 0);
+}
+
+function getCommonHeaders(configs) {
+  if (configs.length === 0) return [];
+  return configs.slice(1).reduce(
+    (common, cfg) => common.filter(header => cfg.headers.includes(header)),
+    [...configs[0].headers]
+  );
+}
+
+function getConfigsFor(which) {
+  return which === 'A' ? state.sheetConfigsA : state.sheetConfigsB;
+}
+
 const state = reactive({
   workbookA: null,
   workbookB: null,
@@ -127,15 +143,28 @@ function refreshSheetData(which) {
     cfg.headerHint = detectHeaderHint(sheet, cfg.headerRow);
   });
 
-  // Re-initialize linked selection from first checked sheet
-  const firstChecked = configs.find(c => c.checked && c.headers.length > 0);
-  if (firstChecked) {
-    if (!firstChecked.headers.includes(sel.linkedKeyCol)) {
-      sel.linkedKeyCol = firstChecked.headers[0] || '';
+  const checkedConfigs = getCheckedSheetConfigs(configs);
+  const commonHeaders = getCommonHeaders(checkedConfigs);
+
+  if (checkedConfigs.length > 0) {
+    if (checkedConfigs.length > 1 && commonHeaders.length === 0) {
+      sel.keyLinked = false;
+      sel.colsLinked = false;
+    }
+
+    const linkedHeaderPool = commonHeaders.length > 0 ? commonHeaders : checkedConfigs[0].headers;
+    if (!linkedHeaderPool.includes(sel.linkedKeyCol)) {
+      sel.linkedKeyCol = linkedHeaderPool[0] || '';
     }
     sel.linkedSelectedCols = sel.linkedSelectedCols.filter(
-      c => c !== sel.linkedKeyCol && firstChecked.headers.includes(c)
+      c => c !== sel.linkedKeyCol && linkedHeaderPool.includes(c)
     );
+
+    checkedConfigs.forEach(cfg => {
+      if (!cfg.keyCol || !cfg.headers.includes(cfg.keyCol)) {
+        cfg.keyCol = cfg.headers[0] || '';
+      }
+    });
   } else {
     sel.linkedKeyCol = '';
     sel.linkedSelectedCols = [];
@@ -215,7 +244,14 @@ function onSheetStartRowChange(which, idx, value) {
 
 function onKeyColChange() {
   for (const which of ['A', 'B']) {
+    const checkedConfigs = getCheckedSheetConfigs(getConfigsFor(which));
     const sel = state.selection[which];
+    if (checkedConfigs.length === 1) {
+      const [cfg] = checkedConfigs;
+      const singleKey = cfg.keyCol || sel.linkedKeyCol || cfg.headers[0] || '';
+      cfg.keyCol = singleKey;
+      sel.linkedKeyCol = singleKey;
+    }
     sel.linkedSelectedCols = sel.linkedSelectedCols.filter(c => c !== sel.linkedKeyCol);
   }
   resetFromStep(4);

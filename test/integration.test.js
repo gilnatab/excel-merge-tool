@@ -208,6 +208,88 @@ describe('combineSheetData', () => {
     assert.equal(result.headers.length, 0);
     assert.equal(result.data.length, 0);
   });
+
+  test('multi-sheet linked mode combines rows with shared key and shared selected columns', () => {
+    const wb = loadWorkbook('a_multi.xlsx');
+    const employees = parseSheetWithOffset(wb.Sheets['Employees'], 1);
+    const managers = parseSheetWithOffset(wb.Sheets['Managers'], 1);
+
+    const multiConfigs = [
+      {
+        name: 'Employees',
+        checked: true,
+        headers: employees.headers,
+        data: employees.data,
+        keyCol: '',
+        selectedCols: [],
+      },
+      {
+        name: 'Managers',
+        checked: true,
+        headers: managers.headers,
+        data: managers.data,
+        keyCol: '',
+        selectedCols: [],
+      },
+    ];
+
+    const linkedSelection = {
+      keyLinked: true,
+      colsLinked: true,
+      linkedKeyCol: 'id',
+      linkedSelectedCols: ['name'],
+      colSearch: '',
+      perSheetColSearch: {},
+    };
+
+    const result = combineSheetData(multiConfigs, linkedSelection);
+    assert.deepEqual(result.headers, ['id', 'name']);
+    assert.equal(result.data.length, 5);
+    assert.ok(result.data.every(row => 'id' in row && 'name' in row));
+    assert.ok(result.data.every(row => row.__sheet__ === 'Employees' || row.__sheet__ === 'Managers'));
+  });
+
+  test('multi-sheet unlinked mode keeps per-sheet key columns and unions selected columns', () => {
+    const wb = loadWorkbook('a_multi_unlinked.xlsx');
+    const employees = parseSheetWithOffset(wb.Sheets['EmployeesById'], 1);
+    const managers = parseSheetWithOffset(wb.Sheets['ManagersById'], 1);
+
+    const multiConfigs = [
+      {
+        name: 'EmployeesById',
+        checked: true,
+        headers: employees.headers,
+        data: employees.data,
+        keyCol: 'employee_id',
+        selectedCols: ['employee_name', 'score'],
+      },
+      {
+        name: 'ManagersById',
+        checked: true,
+        headers: managers.headers,
+        data: managers.data,
+        keyCol: 'manager_id',
+        selectedCols: ['manager_name', 'dept'],
+      },
+    ];
+
+    const unlinkedSelection = {
+      keyLinked: false,
+      colsLinked: false,
+      linkedKeyCol: '',
+      linkedSelectedCols: [],
+      colSearch: '',
+      perSheetColSearch: {},
+    };
+
+    const result = combineSheetData(multiConfigs, unlinkedSelection);
+    assert.deepEqual(result.headers, ['employee_id', 'employee_name', 'score', 'manager_name', 'dept']);
+    assert.equal(result.data.length, 4);
+    assert.equal(result.data[0].employee_id, '1');
+    assert.equal(result.data[2].employee_id, '10');
+    assert.equal(result.data[0].manager_name, '');
+    assert.equal(result.data[2].employee_name, '');
+  });
 });
 
 // ── buildFinalOutput with real merge result ────────────────────────────

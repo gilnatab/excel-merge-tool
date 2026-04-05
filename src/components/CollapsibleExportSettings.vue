@@ -72,6 +72,7 @@ watch(
   () => isCollapsed.value,
   (collapsed) => {
     clearTimeout(addListenerTimer);
+    document.removeEventListener('click', handleOutsideClick, true);
     if (!collapsed) {
       // Use setTimeout (macrotask) so the expand-button's own click event finishes
       // propagating before we start listening — avoids an immediate self-close.
@@ -79,10 +80,9 @@ watch(
       addListenerTimer = setTimeout(() => {
         document.addEventListener('click', handleOutsideClick, true);
       }, 0);
-    } else {
-      document.removeEventListener('click', handleOutsideClick, true);
     }
-  }
+  },
+  { immediate: true }
 );
 
 onBeforeUnmount(() => {
