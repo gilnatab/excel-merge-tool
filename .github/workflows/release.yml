@@ -34,6 +34,9 @@ jobs:
       - name: Build standalone release
         run: npm run build:single
 
+      - name: Build site for Cloudflare Pages
+        run: npm run build
+
       - name: Prepare release assets
         shell: bash
         run: |
@@ -46,3 +49,10 @@ jobs:
           generate_release_notes: true
           files: |
             release-assets/index.html
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=excel-merge-tool --branch=main
