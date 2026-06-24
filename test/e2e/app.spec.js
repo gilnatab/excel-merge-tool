@@ -797,6 +797,12 @@ test.describe('Step 5: Merge Results', () => {
     await expect(page.locator('text=已移除')).toBeVisible();
   });
 
+  test('conflict: 手动选择保留指定组合 marks as resolved', async ({ page }) => {
+    await page.getByTestId('tab-conflicts').click();
+    await page.getByTestId('conflict-manual-choice').nth(1).check();
+    await expect(page.locator('text=已手动保留 A 第 2 条 + B 第 1 条')).toBeVisible();
+  });
+
   test('batch: 全部保留全部 resolves all conflicts at once', async ({ page }) => {
     await page.getByTestId('tab-conflicts').click();
     await page.getByRole('button', { name: '全部保留全部' }).click();

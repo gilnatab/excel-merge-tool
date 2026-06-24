@@ -268,9 +268,19 @@ export function buildFinalOutput(mergeResult, unmatchedSelection, conflictResolu
   }
 
   for (const key of (conflictKeys || [])) {
-    const action = conflictResolutions[key] || 'first';
+    const resolution = conflictResolutions[key] || 'first';
+    const action = typeof resolution === 'string' ? resolution : resolution?.type;
     const group = r.conflicts[key];
     if (!group || action === 'remove') continue;
+
+    if (action === 'single') {
+      const rowA = group.rowsA[resolution.rowAIndex];
+      const rowB = group.rowsB[resolution.rowBIndex];
+      if (rowA && rowB) {
+        rows.push(mergeRow(rowA, rowB, r.outputCols, r.keyColA, r.keyColB));
+      }
+      continue;
+    }
 
     const allRows = [];
     for (const rowA of group.rowsA) {
@@ -281,7 +291,7 @@ export function buildFinalOutput(mergeResult, unmatchedSelection, conflictResolu
 
     if (action === 'all') {
       rows.push(...allRows);
-    } else if (action === 'first' && allRows.length > 0) {
+    } else if (allRows.length > 0) {
       rows.push(allRows[0]);
     }
   }

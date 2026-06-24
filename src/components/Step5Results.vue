@@ -262,7 +262,7 @@
                   </span>
                   <span v-if="state.conflictResolutions[key]"
                         class="ml-auto text-xs text-emerald-600 font-medium">
-                    {{ { all: '已保留全部', first: '仅保留首条', remove: '已移除' }[state.conflictResolutions[key]] }}
+                    {{ conflictResolutionLabel(state.conflictResolutions[key]) }}
                   </span>
                 </div>
                 <!-- Action buttons -->
@@ -288,6 +288,36 @@
                               ? 'bg-error border-error text-on-primary'
                               : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
                           ]">移除</button>
+                </div>
+                <!-- Manual keep one merged row -->
+                <div class="px-4 py-3 border-b border-outline-variant/20 bg-surface-container-lowest">
+                  <div class="flex items-center justify-between gap-3 mb-2">
+                    <div>
+                      <div class="text-xs font-semibold text-on-surface">手动选择保留哪一条</div>
+                      <div class="text-xs text-on-surface-variant/70">
+                        从下方组合中选择一条作为最终合并结果
+                      </div>
+                    </div>
+                  </div>
+                  <div class="max-h-44 overflow-auto rounded-xl border border-outline-variant/30">
+                    <label v-for="choice in conflictPairChoices(key)"
+                           :key="`${choice.rowAIndex}-${choice.rowBIndex}`"
+                           class="flex cursor-pointer items-start gap-3 border-b border-outline-variant/20 px-3 py-2.5 last:border-b-0 hover:bg-surface-container-low">
+                      <input type="radio"
+                             class="mt-0.5"
+                             data-testid="conflict-manual-choice"
+                             :name="`conflict-choice-${key}`"
+                             :aria-label="`手动保留 A 第 ${choice.rowAIndex + 1} 条 + B 第 ${choice.rowBIndex + 1} 条`"
+                             :checked="isSelectedConflictPair(state.conflictResolutions[key], choice.rowAIndex, choice.rowBIndex)"
+                             @change="resolveConflictByKey(key, makeSingleConflictResolution(choice.rowAIndex, choice.rowBIndex))" />
+                      <span class="min-w-0 text-xs text-on-surface">
+                        <span class="font-medium">A 第 {{ choice.rowAIndex + 1 }} 条 + B 第 {{ choice.rowBIndex + 1 }} 条</span>
+                        <span class="block truncate text-on-surface-variant/70">
+                          {{ summarizeConflictPair(key, choice.rowAIndex, choice.rowBIndex) }}
+                        </span>
+                      </span>
+                    </label>
+                  </div>
                 </div>
                 <!-- Data tables (side by side) -->
                 <div class="grid grid-cols-2 gap-0 divide-x divide-outline-variant/20">
@@ -391,6 +421,57 @@ const filteredConflictKeys = computed(() => {
   if (!search) return state.conflictKeys;
   return state.conflictKeys.filter(key => key.toLowerCase().includes(search));
 });
+
+function makeSingleConflictResolution(rowAIndex, rowBIndex) {
+  return { type: 'single', rowAIndex, rowBIndex };
+}
+
+function isSingleConflictResolution(resolution) {
+  return resolution && typeof resolution === 'object' && resolution.type === 'single';
+}
+
+function isSelectedConflictPair(resolution, rowAIndex, rowBIndex) {
+  return isSingleConflictResolution(resolution)
+    && resolution.rowAIndex === rowAIndex
+    && resolution.rowBIndex === rowBIndex;
+}
+
+function conflictResolutionLabel(resolution) {
+  if (isSingleConflictResolution(resolution)) {
+    return `已手动保留 A 第 ${resolution.rowAIndex + 1} 条 + B 第 ${resolution.rowBIndex + 1} 条`;
+  }
+  return { all: '已保留全部', first: '仅保留首条', remove: '已移除' }[resolution] || '';
+}
+
+function conflictPairChoices(key) {
+  const group = state.mergeResult?.conflicts[key];
+  if (!group) return [];
+
+  const choices = [];
+  group.rowsA.forEach((_, rowAIndex) => {
+    group.rowsB.forEach((__, rowBIndex) => {
+      choices.push({ rowAIndex, rowBIndex });
+    });
+  });
+  return choices;
+}
+
+function summarizeConflictPair(key, rowAIndex, rowBIndex) {
+  const group = state.mergeResult?.conflicts[key];
+  if (!group) return '';
+
+  const rowA = group.rowsA[rowAIndex] || {};
+  const rowB = group.rowsB[rowBIndex] || {};
+  const sampleA = state.mergeResult.colsA
+    .slice(0, 3)
+    .map(col => `${col}: ${rowA[col] ?? ''}`)
+    .join('，');
+  const sampleB = state.mergeResult.colsB
+    .slice(0, 3)
+    .map(col => `${col}: ${rowB[col] ?? ''}`)
+    .join('，');
+  return `${state.filenameA || '文件 A'} ${sampleA}；${state.filenameB || '文件 B'} ${sampleB}`;
+}
 
 const allSelectedA = computed(() => {
   const total = state.mergeResult?.unmatchedA.length ?? 0;

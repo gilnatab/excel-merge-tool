@@ -328,6 +328,29 @@ describe('buildFinalOutput', () => {
     const rows = buildFinalOutput(r2, { A: [], B: [] }, { '4': 'all' }, ['4']);
     assert.equal(rows.length, 3); // 1 matched + 2 conflict rows
   });
+
+  test('respects manual single-row conflict selection', () => {
+    const r2 = {
+      ...r,
+      conflicts: {
+        '4': {
+          rowsA: [{ id: '4', name: 'A1' }, { id: '4', name: 'A2' }],
+          rowsB: [{ id: '4', city: 'B1' }, { id: '4', city: 'B2' }]
+        }
+      }
+    };
+    const rows = buildFinalOutput(
+      r2,
+      { A: [], B: [] },
+      { '4': { type: 'single', rowAIndex: 1, rowBIndex: 0 } },
+      ['4']
+    );
+
+    assert.equal(rows.length, 2);
+    const conflictRow = rows.find(row => row.id === '4');
+    assert.equal(conflictRow.name, 'A2');
+    assert.equal(conflictRow.city, 'B1');
+  });
 });
 
 describe('escAttr', () => {
